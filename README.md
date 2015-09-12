@@ -4,7 +4,7 @@ The code is written for demonstration of the paper [1].
 In this paper, the DCT-based denoising [2] is accelerated by using a randomized algorithm.
 Some modifications improve denoising performance in term of PSNR.
 
-The code is 100x faster than the OpenCV's implementation for the paper [2](cv::xphoto::dctDenoising).
+The code is 100x faster than the OpenCV's implementation for the paper [2] (cv::xphoto::dctDenoising).
 Optionally, we can use DHT (discrete Walsh–Hadamard fransform) for fast computation.
 
 * [1] S. Fujita, N. Fukushima, M. Kimura, and Y. Ishibashi, "Randomized Redundant DCT: An Efficient Denoising by using Random Subsampling of DCT Patches," Proc. Siggraph Asia, Technical Brief, Nov. 2015.
