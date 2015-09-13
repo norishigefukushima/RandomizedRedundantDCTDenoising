@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="ソース ファイル\simd">
+      <UniqueIdentifier>{1c617c3c-3051-49db-8cf3-0b5df7b235a7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RandomizedRedundantDXTDenoise.cpp">
@@ -21,17 +24,20 @@
     <ClCompile Include="color.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="dct8x8.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="dct16x16.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="RedundantDXTDenoise.cpp">
       <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="transpose_simd.cpp">
+      <Filter>ソース ファイル\simd</Filter>
+    </ClCompile>
+    <ClCompile Include="dct_simd.cpp">
+      <Filter>ソース ファイル\simd</Filter>
+    </ClCompile>
+    <ClCompile Include="walsh_hadamard_simd.cpp">
+      <Filter>ソース ファイル\simd</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

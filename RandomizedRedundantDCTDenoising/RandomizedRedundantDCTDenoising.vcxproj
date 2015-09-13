@@ -140,11 +140,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="color.cpp" />
-    <ClCompile Include="dct16x16.cpp" />
-    <ClCompile Include="dct8x8.cpp" />
+    <ClCompile Include="dct_simd.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="RandomizedRedundantDXTDenoise.cpp" />
     <ClCompile Include="RedundantDXTDenoise.cpp" />
+    <ClCompile Include="transpose_simd.cpp" />
+    <ClCompile Include="walsh_hadamard_simd.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RedundantDXTDenoise.h" />

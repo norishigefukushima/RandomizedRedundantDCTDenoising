@@ -17,13 +17,13 @@ public:
 	void init(cv::Size size_, int color_, cv::Size patch_size_);
 	RedundantDXTDenoise(cv::Size size, int color, cv::Size patch_size_ = cv::Size(8, 8));
 	RedundantDXTDenoise();
-	void operator()(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
+	virtual void operator()(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
 
 	//void shearable(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), int transform_basis = 0, int direct = 0);
 	//void weighted(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), int transform_basis = 0);
 	//void test(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8));
 
-private:
+protected:
 	BASIS basis;
 	cv::Size patch_size;
 	cv::Size size;
@@ -34,7 +34,7 @@ private:
 
 	int channel;
 
-	void body(float *src, float* dest, float Th);
+	virtual void body(float *src, float* dest, float Th);
 	void body(float *src, float* dest, float* wmap, float Th);
 	void body(float *src, float* dest, float Th, int dr);
 
@@ -46,4 +46,29 @@ private:
 
 	void decorrelateColorForward(float* src, float* dest, int width, int height);
 	void decorrelateColorInvert(float* src, float* dest, int width, int height);
+};
+
+class RandomizedRedundantDXTDenoise: public RedundantDXTDenoise
+{
+	cv::Mat sampleMap;
+	std::vector<cv::Point> sampleLUT;
+protected:
+	virtual void body(float *src, float* dest, float Th);
+public:
+	enum SAMPLING
+	{
+		FULL = 0,
+		LATTICE,
+		RANDOM_IMAGE_LUT,
+		RANDOM_SAMPLE_LUT
+	};
+	void setSampling(SAMPLING samplingType, int d);
+
+
+	RandomizedRedundantDXTDenoise(){ ; };
+	RandomizedRedundantDXTDenoise(cv::Size size, int color, cv::Size patch_size_ = cv::Size(8, 8)) :RedundantDXTDenoise(size, color, patch_size_)
+	{
+	}
+	virtual void operator()(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
+
 };
