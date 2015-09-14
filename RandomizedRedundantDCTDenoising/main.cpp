@@ -7,45 +7,53 @@ using namespace lab;
 
 int main()
 {
-	Mat src = imread("img/kodim03.png");
+	Mat src_ = imread("img/kodim03.png");
+	Mat src;
+	resize(src_, src, Size(1024, 1024));
 	Mat noise;
 	Mat dest;
 	Mat dest2;
 	float sigma = 20.f;
 	addNoise(src, noise, sigma);
-	int iteration = 10000;
+	int iteration = 10000000000;
 
 	//cout << YPSNR(src, noise) << endl;
 	RedundantDXTDenoise dctDenoise;
 
 	RandomizedRedundantDXTDenoise rrdct;
 
+	//dctDenoise.isSSE = false;
 	for (int i = 0; i < iteration; i++)
 	{
-		CalcTime t("8x8 R-DCT");
+		//CalcTime t("8x8 R-DCT");
 		//rrdct(noise, dest, sigma, Size(8, 8));
+		//showMatInfo(dest);
 		//noise.copyTo(dest);
-		dctDenoise(noise, dest, sigma, Size(8, 8));
+		//
+		//dctDenoise(noise, dest, sigma, Size(8, 8));
+		dctDenoise(noise, dest, sigma, Size(16, 16));
+		//guiAlphaBlend(src, dest);
 		cout << YPSNR(src, dest) << endl;
 		imshow("test", dest); waitKey(1);
 	}
 	cout << YPSNR(src, dest) << endl;
-
+	/*
 	for (int i = 0; i < iteration; i++)
 	{
 		CalcTime t("4x4 DCT");
 		dctDenoise(noise, dest, sigma, Size(4, 4));
 	}
 	cout << YPSNR(src, dest) << endl;
-
+	*/
 	for (int i = 0; i < iteration; i++)
 	{
 		CalcTime t("8x8 DCT");
-		dctDenoise(noise, dest, sigma, Size(8, 8));
+		dctDenoise(noise, dest2, sigma, Size(8, 8));
 	}
-	cout << YPSNR(src, dest) << endl;
-	dest.setTo(0);
-	guiAlphaBlend(src, dest);
+	cout << YPSNR(src, dest2) << endl;
+	//dest.setTo(0);
+//	guiAlphaBlend(dest, dest2);
+	//guiAlphaBlend(src, dest);
 
 	for (int i = 0; i < iteration; i++)
 	{
@@ -55,7 +63,7 @@ int main()
 
 	cout << YPSNR(src, dest) << endl;
 
-	dctDenoise.isSSE = false;
+//	dctDenoise.isSSE = false;
 	for (int i = 0; i < iteration; i++)
 	{
 		CalcTime t("16x16 DCT");

@@ -187,7 +187,7 @@ public:
 		const int w6 = 6 * width;
 		const int w7 = 7 * width;
 		int j;
-
+		
 		for (j = range.start; j != range.end; j++)
 		{
 			Mat patch(Size(8, 8), CV_32F);
@@ -1840,6 +1840,10 @@ void RedundantDXTDenoise::body(float *src, float* dest, float* wmap, float Th)
 
 void RedundantDXTDenoise::body(float *src, float* dest, float Th)
 {
+	int v = getNumThreads();
+	int c = getNumberOfCPUs();
+	int thread = v/c;
+
 	if (basis == BASIS::DCT)
 	{
 		if (isSSE)
@@ -1857,12 +1861,13 @@ void RedundantDXTDenoise::body(float *src, float* dest, float Th)
 			else if (patch_size.width == 8)
 			{
 				DenoiseDCTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12.0);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
 			}
 			else if (patch_size.width == 16)
 			{
 				DenoiseDCTShrinkageInvorker16x16 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
+				//parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, 24);
 			}
 			else
 			{
@@ -2351,7 +2356,8 @@ void RedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psi
 			buff = im.clone();
 		}
 
-		sum = Mat::zeros(buff.size(), CV_32F);
+		if (sum.size() != buff.size())sum = Mat::zeros(buff.size(), CV_32F);
+		else sum.setTo(0);
 		ipixels = buff.ptr<float>(0);
 		opixels = sum.ptr<float>(0);
 

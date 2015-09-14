@@ -56,33 +56,34 @@ private:
 	Mat& lut_im;
 	const int wstep;
 	const int hstep;
-	const int imwidth;
-	const int imheight;
-	const int hThread;
+	const int width;
+	const int height;
+	
+	const int sliceHeightReal;
 	const Size clip_size;
 	const Size patch_size;
 public:
-	RandomizedRDCTDenoise8x8_Invoker(float* sim, float* dest, Mat& lutim, float thresh, Size clipSize, Size patchSize, int width, int height, int w_step, int h_step, int nthread) :
-		src(sim), dst(dest), lut_im(lutim), th(thresh), clip_size(clipSize), patch_size(patchSize), imwidth(width), imheight(height), wstep(w_step), hstep(h_step), hThread(nthread)
+	RandomizedRDCTDenoise8x8_Invoker(float* sim, float* dest, Mat& lutim, float thresh, Size clipSize, Size patchSize, int image_width, int image_height, int w_step, int h_step, int slice_height_real) :
+		src(sim), dst(dest), lut_im(lutim), th(thresh), clip_size(clipSize), patch_size(patchSize), width(image_width), height(image_height), wstep(w_step), hstep(h_step), sliceHeightReal(slice_height_real)
 	{
 	}
 
 	virtual void operator() (const Range& range) const
 	{
-		const int w1 = 1 * imwidth;
-		const int w2 = 2 * imwidth;
-		const int w3 = 3 * imwidth;
-		const int w4 = 4 * imwidth;
-		const int w5 = 5 * imwidth;
-		const int w6 = 6 * imwidth;
-		const int w7 = 7 * imwidth;
+		const int w1 = 1 * width;
+		const int w2 = 2 * width;
+		const int w3 = 3 * width;
+		const int w4 = 4 * width;
+		const int w5 = 5 * width;
+		const int w6 = 6 * width;
+		const int w7 = 7 * width;
 
 		int data_size = sizeof(float)*patch_size.width;
 		
 		for (int k = range.start; k != range.end; k++)
 		{
 			Mat patch(patch_size, CV_32F);
-			Mat sclip = Mat(clip_size, CV_32F, src + imwidth*k*hThread);
+			Mat sclip = Mat(clip_size, CV_32F, src + width*k*(sliceHeightReal));
 			Mat dc = Mat::zeros(clip_size, CV_32F);//data map
 			Mat cc = Mat::zeros(clip_size, CV_32F);//count map
 
@@ -92,10 +93,10 @@ public:
 			for (int j = 0; j<hstep; j++)
 			{
 				float* ptch = patch.ptr<float>(0);
-				float* s = &s0[imwidth*j];
-				float* d = &d0[imwidth*j];
-				float* c = &c0[imwidth*j];
-				uchar* pt = lut_im.ptr<uchar>(j + k*hThread);
+				float* s = &s0[width*j];
+				float* d = &d0[width*j];
+				float* c = &c0[width*j];
+				uchar* pt = lut_im.ptr<uchar>(j + k*sliceHeightReal);
 
 				for (int i = 0; i<wstep; i++)
 				{
@@ -112,18 +113,18 @@ public:
 
 						fDCT8x8_threshold_keep00_iDCT8x8(ptch, th);
 
+						const __m128 mones = _mm_set1_ps(1.0);
 						for (int t = 0; t < patch_size.width; t++)
 						{
 							float* s2 = patch.ptr<float>(t);
-							float* d2 = &d[t*imwidth];
-							float* c2 = &c[t*imwidth];
+							float* d2 = &d[t*width];
+							float* c2 = &c[t*width];
 							__m128 mp1 = _mm_load_ps(s2);
 							__m128 sp1 = _mm_loadu_ps(d2);
 							__m128 cp1 = _mm_loadu_ps(c2);
-							__m128 op1 = _mm_set1_ps(1.0);
-
+							
 							_mm_storeu_ps(d2, _mm_add_ps(sp1, mp1));
-							_mm_storeu_ps(c2, _mm_add_ps(cp1, op1));
+							_mm_storeu_ps(c2, _mm_add_ps(cp1, mones));
 
 							s2 += 4;
 							d2 += 4;
@@ -133,7 +134,7 @@ public:
 							sp1 = _mm_loadu_ps(d2);
 							cp1 = _mm_loadu_ps(c2);
 							_mm_storeu_ps(d2, _mm_add_ps(sp1, mp1));
-							_mm_storeu_ps(c2, _mm_add_ps(cp1, op1));
+							_mm_storeu_ps(c2, _mm_add_ps(cp1, mones));
 						}
 					}
 					s++;
@@ -147,20 +148,24 @@ public:
 			//Mat temp_clip = cc(Rect(patch_size.width,patch_size.height,imwidth-2*patch_size.width,hThread)).clone();
 			//calcMatStatic(temp_clip);
 
-			Mat sum_clip = Mat(Size(imwidth, hThread), CV_32F, dst + imwidth*k*hThread);
-			dc(Rect(0, patch_size.height, imwidth, hThread)).copyTo(sum_clip);
+			Mat sum_clip = Mat(Size(width, sliceHeightReal), CV_32F, dst + width*sliceHeightReal*k);
+			dc(Rect(0, patch_size.height, width, sliceHeightReal)).copyTo(sum_clip);
 		}
 	}
 };
 
 void setLattice(Mat& dest, int d)
 {
+	RNG n(cv::getTickCount());
+	int hd = d / 2;
 	for (int j = d/2; j < dest.rows -d/2; j += d)
 	{
 		uchar* m = dest.ptr(j);
 		for (int i = d/2; i < dest.cols -d/2; i += d)
 		{
-			m[i] = 1;
+			int x = n.uniform(-hd, hd);
+			int y = dest.cols*n.uniform(-hd, hd);
+			m[y+x+i] = 1;
 		}
 	}
 }
@@ -245,7 +250,7 @@ void RandomizedRedundantDXTDenoise::body(float *src, float* dest, float Th)
 
 void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma, Size psize, BASIS transform_basis)
 {
-	int numThread = getNumThreads();
+	int numThreads = getNumThreads();
 	Mat temp;
 	if (src.depth() != CV_32F) src.convertTo(temp, CV_MAKETYPE(CV_32F, src.channels()));
 	else temp = src.clone();
@@ -255,52 +260,44 @@ void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma,
 
 	int w = src.cols + 2 * psize.width;
 	w = ((4 - w % 4) % 4);
+	int h = src.rows;
+	h = ((numThreads - h % numThreads) % numThreads);
 
-	copyMakeBorder(temp, im, psize.height, psize.height+psize.height, psize.width, psize.width + w, cv::BORDER_REPLICATE);
+	copyMakeBorder(temp, im, psize.height, 3*psize.height+h, psize.width, psize.width + w, cv::BORDER_REPLICATE);
 	int imwidth = im.cols;
 	int imheight = im.rows;
 	int imarea = imwidth * imheight;
 	int wstep = imwidth - psize.width + 1;
-	int hstep = imheight - psize.height + 3;
+	int hstep = imheight - psize.height + 1;
 	channel = im.channels();
 	float th = 3.f * sigma;
 
 	// pre processing
-	Mat buff;
 	if (channel == 1)
-		buff = im;
+		im.copyTo(buff);
 	else cvtColorBGR2PLANE(im, buff);
-		
-
-	Mat sum = Mat::zeros(buff.size(), CV_32F);
-
+	
 	if (channel == 3)	decorrelateColorForward(buff.ptr<float>(0), buff.ptr<float>(0), imwidth, imheight);
-
 
 	// body
 //	setLUT();
 	//setSampling(SAMPLING::FULL, 0);
-	setSampling(SAMPLING::LATTICE, psize.width/2+1);
+	setSampling(SAMPLING::LATTICE, psize.width/2-1);
 	
 
-	const int hThread = src.rows / numThread;
-	const int hstep2 = src.rows / numThread + psize.height - 1;
-	const Size clip_size(imwidth, hThread + 2 * psize.height);
+	if (sum.size() != buff.size())sum = Mat::zeros(buff.size(), CV_32F);
+	else sum.setTo(0);
 
-	const int w1 = 1 * imwidth;
-	const int w2 = 2 * imwidth;
-	const int w3 = 3 * imwidth;
-	const int w4 = 4 * imwidth;
-	const int w5 = 5 * imwidth;
-	const int w6 = 6 * imwidth;
-	const int w7 = 7 * imwidth;
+	const int slice_real_height = (src.rows+h) / numThreads;
+	const int hstep2 = slice_real_height + psize.height - 1;
+	const Size clip_size(imwidth, slice_real_height + 2 * psize.height);
 
 	for (int l = 0; l<channel; l++)
 	{
 		float* s = buff.ptr<float>(l*imheight);
 		float* d = sum.ptr<float>(l*imheight);
-		RandomizedRDCTDenoise8x8_Invoker body(s, d, sampleMap, th, clip_size, patch_size, imwidth, imheight, wstep, hstep2, hThread);
-		parallel_for_(Range(0, numThread+1), body);
+		RandomizedRDCTDenoise8x8_Invoker body(s, d, sampleMap, th, clip_size, patch_size, imwidth, imheight, wstep, hstep2, slice_real_height);
+		parallel_for_(Range(0, numThreads), body);
 	}
 
 	if (channel == 3)
@@ -323,11 +320,9 @@ void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma,
 	//cp::guiAlphaBlend(dest, dest);
 	//cp::guiAlphaBlend(temp, temp);
 }
-/*
-//void RandomizedRedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
-{
 
-	
+void RandomizedRedundantDXTDenoise::hardwareSubsampling(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
+{	
 	Mat src;
 	if (src_.depth() != CV_32F)src_.convertTo(src, CV_MAKETYPE(CV_32F, src_.channels()));
 	else src = src_;
@@ -390,7 +385,7 @@ void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma,
 		//body(ipixels, opixels,ipixels+size1, opixels+size1,ipixels+2*size1, opixels+2*size1,Th);
 
 	}
-	/*
+	
 	{
 #ifdef _CALCTIME_
 		CalcTime t("div");
@@ -430,7 +425,5 @@ void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma,
 		else im2 = im;
 
 		Mat(im2(Rect(patch_size.width, patch_size.height, src.cols, src.rows))).copyTo(dest);
-	}
-	
+	}	
 }
-*/

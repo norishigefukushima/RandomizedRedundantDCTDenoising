@@ -70,5 +70,6 @@ public:
 	{
 	}
 	virtual void operator()(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
+	void RandomizedRedundantDXTDenoise::hardwareSubsampling(cv::Mat& src_, cv::Mat& dest, float sigma, cv::Size psize, BASIS transform_basis);
 
 };
