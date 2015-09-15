@@ -2312,6 +2312,7 @@ Mat(im(Rect(patch_size.width, patch_size.height, src.cols, src.rows))).copyTo(de
 }
 }
 */
+
 void RedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
 {
 	Mat src;
@@ -2333,7 +2334,7 @@ void RedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psi
 	float* opixels;
 
 	// Threshold
-	float Th = 3 * sigma;
+	float Th = getThreshold(sigma); 
 
 	// DCT window size
 	{
@@ -2418,4 +2419,9 @@ void RedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psi
 
 		Mat(im2(Rect(patch_size.width, patch_size.height, src.cols, src.rows))).copyTo(dest);
 	}
+}
+
+float RedundantDXTDenoise::getThreshold(float sigmaNoise)
+{
+	return 2.7 * sigmaNoise;
 }

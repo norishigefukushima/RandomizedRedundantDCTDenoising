@@ -237,6 +237,7 @@ Point Grid::imageToGrid(Point pt)
 
 	return Point(gx, gy);
 }
+
 void Grid::set(Point pt)
 {
 	Point gpt = imageToGrid(pt);
@@ -269,7 +270,7 @@ bool inKernel(Point pt, int width, int height)
 
 inline float Distance(Point& pt1, Point& pt2)
 {
-	return sqrt((pt1.x - pt2.x)*(pt1.x - pt2.x) + (pt1.y - pt2.y)*(pt1.y - pt2.y));
+	return (float)sqrt((pt1.x - pt2.x)*(pt1.x - pt2.x) + (pt1.y - pt2.y)*(pt1.y - pt2.y));
 }
 
 
@@ -346,6 +347,7 @@ void setPoissonDisk(Mat& kernel, const double mind, RNG& rng)
 
 void setLattice(Mat& dest, int d, RNG& rng)
 {
+	d = max(1, d);
 	int hd = d / 2;
 	for (int j = d/2; j < dest.rows -d/2; j += d)
 	{
@@ -359,27 +361,51 @@ void setLattice(Mat& dest, int d, RNG& rng)
 	}
 }
 
-void RandomizedRedundantDXTDenoise::setSampling(SAMPLING samplingType, int d)
+void RandomizedRedundantDXTDenoise::setSamplingMap(Mat& samplingMap, SAMPLING samplingType, int d)
 {
 	RNG rng;
+	Size s = Size(size.width + patch_size.width, size.height + patch_size.height);
 	switch (samplingType)
 	{
 	default:
 	case FULL:
-		sampleMap = Mat::ones(size, CV_8U);
+		samplingMap = Mat::ones(s, CV_8U);
 		break;
 
 	case LATTICE:
-		sampleMap = Mat::zeros(size, CV_8U);
-		setLattice(sampleMap, d, rng);
+		samplingMap = Mat::zeros(s, CV_8U);
+		setLattice(samplingMap, d, rng);
 		break;
+
 	case POISSONDISK:
-		sampleMap = Mat::zeros(size, CV_8U);
-		setPoissonDisk(sampleMap, d, rng);
+		samplingMap = Mat::zeros(s, CV_8U);
+		setPoissonDisk(samplingMap, d, rng);
 		break;
-	}
-	//cp::showMatInfo(sampleMap);
+	}	
 }
+
+void RandomizedRedundantDXTDenoise::generateSamplingMaps(Size size, Size psize, int number_of_LUT, int d, SAMPLING sampleType)
+{
+	RNG rng;
+	init(size, 3, psize);
+	
+	samplingMapLUTs.clear();
+	samplingMapLUTs.resize(number_of_LUT);
+
+	for (int i = 0; i < number_of_LUT; i++)
+	{
+		setSamplingMap(samplingMapLUTs[i], sampleType, d);
+		//cp::showMatInfo(samplingMapLUTs[i]);
+	}
+}
+
+void RandomizedRedundantDXTDenoise::getSamplingFromLUT(Mat& samplingMap)
+{
+	RNG rng;
+	if ((int)samplingMapLUTs.size() == 0) generateSamplingMaps(size, patch_size,20, 0, SAMPLING::FULL);
+	samplingMapLUTs[rng.uniform(0, (int)samplingMapLUTs.size())].copyTo(samplingMap);
+}
+
 
 void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma, Size psize, BASIS transform_basis)
 {
@@ -403,7 +429,9 @@ void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma,
 	int wstep = imwidth - psize.width + 1;
 	int hstep = imheight - psize.height + 1;
 	channel = im.channels();
-	float th = 3.f * sigma;
+
+	
+	float th = getThreshold(sigma);
 
 	// pre processing
 	if (channel == 1)
@@ -415,7 +443,7 @@ void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma,
 	// body
 //	setLUT();
 	//setSampling(SAMPLING::FULL, 0);
-	setSampling(SAMPLING::LATTICE, psize.width/2-1);
+	//setSampling(SAMPLING::LATTICE, psize.width/2-1);
 	
 
 	if (sum.size() != buff.size())sum = Mat::zeros(buff.size(), CV_32F);
@@ -429,8 +457,8 @@ void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma,
 	{
 		float* s = buff.ptr<float>(l*imheight);
 		float* d = sum.ptr<float>(l*imheight);
-		RandomizedRDCTDenoise8x8_Invoker body(s, d, sampleMap, th, clip_size, patch_size, imwidth, imheight, wstep, hstep2, slice_real_height);
-		parallel_for_(Range(0, numThreads), body);
+//		RandomizedRDCTDenoise8x8_Invoker body(s, d, sampleMap, th, clip_size, patch_size, imwidth, imheight, wstep, hstep2, slice_real_height);
+//		parallel_for_(Range(0, numThreads), body);
 	}
 
 	if (channel == 3)
@@ -446,8 +474,6 @@ void RandomizedRedundantDXTDenoise::operator()(Mat& src, Mat& dest, float sigma,
 	if (src.depth() != CV_32F) im.convertTo(temp, src.type());
 	else temp = im;
 
-
-	
 	temp(Rect(psize.width, 0, src.cols, src.rows)).copyTo(dest);
 
 	//cp::guiAlphaBlend(dest, dest);

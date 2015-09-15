@@ -24,6 +24,7 @@ public:
 	//void test(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8));
 
 protected:
+	float getThreshold(float sigmaNoise);
 	BASIS basis;
 	cv::Size patch_size;
 	cv::Size size;
@@ -50,10 +51,6 @@ protected:
 
 class RandomizedRedundantDXTDenoise: public RedundantDXTDenoise
 {
-	cv::Mat sampleMap;
-	std::vector<cv::Point> sampleLUT;
-protected:
-	virtual void body(float *src, float* dest, float Th);
 public:
 	enum SAMPLING
 	{
@@ -63,14 +60,28 @@ public:
 		RANDOM_IMAGE_LUT,
 		RANDOM_SAMPLE_LUT
 	};
-	void setSampling(SAMPLING samplingType, int d);
-
-
+	
 	RandomizedRedundantDXTDenoise(){ ; };
 	RandomizedRedundantDXTDenoise(cv::Size size, int color, cv::Size patch_size_ = cv::Size(8, 8)) :RedundantDXTDenoise(size, color, patch_size_)
 	{
+		generateSamplingMaps(size, patch_size_,20, 0, SAMPLING::FULL);
 	}
+	
+	void generateSamplingMaps(cv::Size imageSize, cv::Size patch_size, int number_of_LUT, int d, SAMPLING sampleType = SAMPLING::POISSONDISK);
+
 	virtual void operator()(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
-	void RandomizedRedundantDXTDenoise::interlace(cv::Mat& src_, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT, SAMPLING sampleType = SAMPLING::LATTICE, int d = -1);
+	void RandomizedRedundantDXTDenoise::interlace(cv::Mat& src_, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
 	void div(float* inplace0, float* inplace1, float* inplace2, float* count, const int size1);
+
+protected:
+	virtual void body(float *src, float* dest, float Th);
+	
+
+	void getSamplingFromLUT(cv::Mat& samplingMap);
+	void setSamplingMap(cv::Mat& samplingMap, SAMPLING samplingType, int d);
+
+	
+	std::vector<cv::Mat> samplingMapLUTs;
+	cv::Mat samplingMap;
+	std::vector<cv::Point> sampleLUT;//not used
 };

@@ -298,6 +298,7 @@ public:
 void RandomizedRedundantDXTDenoise::body(float *src, float* dest, float Th)
 {
 	int numThread = 1;  getNumThreads();
+
 	if (basis == BASIS::DCT)
 	{
 		if (isSSE)
@@ -312,12 +313,12 @@ void RandomizedRedundantDXTDenoise::body(float *src, float* dest, float Th)
 			}
 			else if (patch_size.width == 8)
 			{
-				RRDCTThresholdingInvorker8x8 invork(src, dest, sampleMap, Th, size.width, size.height);
+				RRDCTThresholdingInvorker8x8 invork(src, dest, samplingMap, Th, size.width, size.height);
 				parallel_for_(Range(0, size.height - patch_size.height), invork, 24);
 			}
 			else if (patch_size.width == 16)
 			{
-				RRDCTThresholdingInvorker16x16 invork(src, dest, sampleMap, Th, size.width, size.height);
+				RRDCTThresholdingInvorker16x16 invork(src, dest, samplingMap, Th, size.width, size.height);
 				parallel_for_(Range(0, size.height - patch_size.height), invork, 24);
 			}
 			else
@@ -365,19 +366,22 @@ void RandomizedRedundantDXTDenoise::div(float* inplace0, float* inplace1, float*
 	}
 }
 
-void RandomizedRedundantDXTDenoise::interlace(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis, SAMPLING sampleType, int d)
+void RandomizedRedundantDXTDenoise::interlace(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
 {
 	Mat src;
 	if (src_.depth() != CV_32F)src_.convertTo(src, CV_MAKETYPE(CV_32F, src_.channels()));
 	else src = src_;
 
 	basis = transform_basis;
-	if (src.size() != size || src.channels() != channel || psize != patch_size) init(src.size(), src.channels(), psize);
+	if (src.size() != size || src.channels() != channel || psize != patch_size)
+	{
+		init(src.size(), src.channels(), psize);
+	}
 
-	int w = src.cols + 2 * psize.width;
+	int w = src.cols + 2 * patch_size.width;
 	w = ((4 - w % 4) % 4);
 
-	copyMakeBorder(src, im, psize.height, psize.height, psize.width, psize.width + w, cv::BORDER_REPLICATE);
+	copyMakeBorder(src, im, psize.height, patch_size.height, patch_size.width, patch_size.width + w, cv::BORDER_REPLICATE);
 
 	const int width = im.cols;
 	const int height = im.rows;
@@ -386,7 +390,7 @@ void RandomizedRedundantDXTDenoise::interlace(Mat& src_, Mat& dest, float sigma,
 	float* opixels;
 
 	// Threshold
-	float Th = 3 * sigma;
+	float Th = getThreshold(sigma);
 	Mat cmap = Mat::zeros(im.size(), CV_32F);
 	{
 #ifdef _CALCTIME_
@@ -410,11 +414,11 @@ void RandomizedRedundantDXTDenoise::interlace(Mat& src_, Mat& dest, float sigma,
 			decorrelateColorForward(ipixels, ipixels, width, height);
 		}
 	}
-
+	
 	//setSampling(SAMPLING::FULL, 0);
-	if (d<0) setSampling(sampleType, psize.width / 3);
-	else setSampling(sampleType, d);
-
+	////if (d<0) setSamplingMap(sampleType, psize.width / 3);
+	//else setSampling(sampleType, d);
+	getSamplingFromLUT(samplingMap);
 	{
 #ifdef _CALCTIME_
 		CalcTime t("body");
@@ -429,7 +433,7 @@ void RandomizedRedundantDXTDenoise::interlace(Mat& src_, Mat& dest, float sigma,
 		{
 			body(ipixels, opixels, Th);
 		}
-		computeRandomizedCoutMap(cmap, sampleMap, psize);
+		computeRandomizedCoutMap(cmap, samplingMap, patch_size);
 	}
 	div(opixels, opixels + size1, opixels + 2 * size1, cmap.ptr<float>(0), size1);
 
