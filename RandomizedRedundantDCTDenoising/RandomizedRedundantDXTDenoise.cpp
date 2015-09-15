@@ -154,17 +154,206 @@ public:
 	}
 };
 
-void setLattice(Mat& dest, int d)
+class RandomQueue
 {
-	RNG n(cv::getTickCount());
+public:
+
+	deque<Point> dq1, dq2;
+
+	bool empty();
+	int size();
+	void push(Point pt);
+	Point pop();
+};
+
+// Random Queue
+bool RandomQueue::empty()
+{
+	return dq1.empty();
+}
+int RandomQueue::size()
+{
+	return (int)dq1.size();
+}
+void RandomQueue::push(Point pt)
+{
+	dq1.push_front(pt);
+}
+Point RandomQueue::pop()
+{
+	int n = rand() % dq1.size();
+
+	Point pt;
+	while (n--)
+	{
+		dq2.push_front(dq1.front());
+		dq1.pop_front();
+	}
+
+	pt = dq1.front();
+	dq1.pop_front();
+
+	while (!dq2.empty())
+	{
+		dq1.push_front(dq2.front());
+		dq2.pop_front();
+	}
+	return pt;
+}
+
+// Grid
+class Grid
+{
+public:
+
+	int width;
+	int height;
+	double cellsize;
+	deque<Point> *bpt;
+
+	Grid(double _cellsize, int _width, int _height);
+	~Grid();
+	Point imageToGrid(Point pt);
+	void set(Point pt);
+};
+
+Grid::Grid(double _cellsize, int _width, int _height)
+{
+	cellsize = _cellsize;
+
+	width = (int)(_width / cellsize) + 1;
+	height = (int)(_height / cellsize) + 1;
+
+	bpt = new deque<Point>[width*height];
+}
+Grid::~Grid()
+{
+	delete[] bpt;
+}
+Point Grid::imageToGrid(Point pt)
+{
+	int gx = (int)(pt.x / cellsize);
+	int gy = (int)(pt.y / cellsize);
+
+	return Point(gx, gy);
+}
+void Grid::set(Point pt)
+{
+	Point gpt = imageToGrid(pt);
+
+	bpt[gpt.x + width*gpt.y].push_front(pt);
+}
+
+Point generateRandomPointAround(Point pt, const double mind, RNG& rng)
+{
+	float r1 = rng.uniform(0.f, 1.f);
+	float r2 = rng.uniform(0.f, 1.f);
+
+	double radius = mind*(1 + r1);
+	double angle = 2 * CV_PI*r2;
+
+	int x = (int)(pt.x + radius*cos(angle));
+	int y = (int)(pt.y + radius*sin(angle));
+
+	return Point(x, y);
+}
+
+bool inKernel(Point pt, int width, int height)
+{
+	if (pt.x < 0 || pt.x >= width)
+		return false;
+	if (pt.y < 0 || pt.y >= height)
+		return false;
+	return true;
+}
+
+inline float Distance(Point& pt1, Point& pt2)
+{
+	return sqrt((pt1.x - pt2.x)*(pt1.x - pt2.x) + (pt1.y - pt2.y)*(pt1.y - pt2.y));
+}
+
+
+bool inNeibourhood(Grid& grid, Point pt, const double mind, const double cellsize)
+{
+	Point gpt = grid.imageToGrid(pt);
+
+	for (int y = -2; y <= 2; y++)
+	{
+		if (y + gpt.y >= 0 && y + gpt.y < grid.height)
+		{
+			for (int x = -2; x <= 2; x++)
+			{
+				if (x + gpt.x >= 0 && x + gpt.x < grid.width)
+				{
+					Point ppt = Point(x + gpt.x, y + gpt.y);
+					int w = grid.width;
+					int num = (int)grid.bpt[ppt.x + w*ppt.y].size();
+
+					if (num > 0)
+					{
+						int i = 0;
+
+						while (i < num)
+						{
+							Point bpt_ = grid.bpt[ppt.x + w*ppt.y].at(i);
+							float dist = Distance(bpt_, pt);
+							if (dist < mind)
+								return false;
+							i++;
+						}
+					}
+				}
+			}
+		}
+	}
+	return true;
+}
+
+void setPoissonDisk(Mat& kernel, const double mind, RNG& rng)
+{
+	CV_Assert(kernel.type() == CV_8U);
+	kernel.setTo(0);
+	int width = kernel.cols;
+	int height = kernel.rows;
+
+	double cellsize = mind / sqrt((double)2);
+
+	Grid grid(cellsize, width, height);
+	RandomQueue proc;
+
+	Point first(rng.uniform(0, width), rng.uniform(0, height));
+
+	proc.push(first);
+	kernel.at<uchar>(first) = 255;
+	grid.set(first);
+
+	while (!proc.empty())
+	{
+		Point pt = proc.pop();
+		for (int i = 0; i < 30; i++)
+		{
+			Point newpt = generateRandomPointAround(pt, mind, rng);
+
+			if (inKernel(newpt, width, height) && inNeibourhood(grid, newpt, mind, cellsize))
+			{
+				proc.push(newpt);
+				kernel.at<uchar>(newpt) = 255;
+				grid.set(newpt);
+			}
+		}
+	}
+}
+
+void setLattice(Mat& dest, int d, RNG& rng)
+{
 	int hd = d / 2;
 	for (int j = d/2; j < dest.rows -d/2; j += d)
 	{
 		uchar* m = dest.ptr(j);
 		for (int i = d/2; i < dest.cols -d/2; i += d)
 		{
-			int x = n.uniform(-hd, hd);
-			int y = dest.cols*n.uniform(-hd, hd);
+			int x = rng.uniform(-hd, hd);
+			int y = dest.cols*rng.uniform(-hd, hd);
 			m[y+x+i] = 1;
 		}
 	}
@@ -172,6 +361,7 @@ void setLattice(Mat& dest, int d)
 
 void RandomizedRedundantDXTDenoise::setSampling(SAMPLING samplingType, int d)
 {
+	RNG rng;
 	switch (samplingType)
 	{
 	default:
@@ -181,7 +371,11 @@ void RandomizedRedundantDXTDenoise::setSampling(SAMPLING samplingType, int d)
 
 	case LATTICE:
 		sampleMap = Mat::zeros(size, CV_8U);
-		setLattice(sampleMap, d);
+		setLattice(sampleMap, d, rng);
+		break;
+	case POISSONDISK:
+		sampleMap = Mat::zeros(size, CV_8U);
+		setPoissonDisk(sampleMap, d, rng);
 		break;
 	}
 	//cp::showMatInfo(sampleMap);

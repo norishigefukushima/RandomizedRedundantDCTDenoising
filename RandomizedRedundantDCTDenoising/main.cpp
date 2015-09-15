@@ -41,7 +41,7 @@ int main()
 			rrdct.interlace(noise, dest, sigma, Size(16, 16),
 			//rrdct.interlace(noise, dest, sigma, Size(8, 8),
 			//RandomizedRedundantDXTDenoise::BASIS::DCT, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE, 4);
-				RandomizedRedundantDXTDenoise::BASIS::DCT, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE, 8);
+				RandomizedRedundantDXTDenoise::BASIS::DCT, RandomizedRedundantDXTDenoise::SAMPLING::POISSONDISK, 3);
 				//RandomizedRedundantDXTDenoise::BASIS::DCT, RandomizedRedundantDXTDenoise::SAMPLING::FULL, 1);
 				
 			//showMatInfo(dest);

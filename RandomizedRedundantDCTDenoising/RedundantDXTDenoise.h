@@ -59,6 +59,7 @@ public:
 	{
 		FULL = 0,
 		LATTICE,
+		POISSONDISK,
 		RANDOM_IMAGE_LUT,
 		RANDOM_SAMPLE_LUT
 	};
