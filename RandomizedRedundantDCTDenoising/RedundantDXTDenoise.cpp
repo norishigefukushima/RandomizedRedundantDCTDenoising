@@ -52,7 +52,7 @@ void Hadamard2D16x16(float* src);
 //TBB for DCT TBB DCT tbbdct//////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////
 
-class DenoiseDCTShrinkageInvorker16x16 : public cv::ParallelLoopBody
+class RDCTThresholdingInvorker16x16 : public cv::ParallelLoopBody
 {
 private:
 	float* src;
@@ -63,10 +63,10 @@ private:
 
 public:
 
-	DenoiseDCTShrinkageInvorker16x16(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
+	RDCTThresholdingInvorker16x16(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
-		;
 	}
+
 	virtual void operator() (const Range& range) const
 	{
 		const int size1 = width * height;
@@ -87,9 +87,8 @@ public:
 		const int w13 = 13 * width;
 		const int w14 = 14 * width;
 		const int w15 = 15 * width;
-		int j;
-
-		for (j = range.start; j != range.end; j++)
+		
+		for (int j = range.start; j != range.end; j++)
 		{
 			Mat patch(Size(16, 16), CV_32F);
 			Mat mask(Size(16, 16), CV_8U);
@@ -171,7 +170,6 @@ public:
 
 	DenoiseDCTShrinkageInvorker8x8(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
-		;
 	}
 
 	virtual void operator() (const Range& range) const
@@ -185,10 +183,9 @@ public:
 		const int w4 = 4 * width;
 		const int w5 = 5 * width;
 		const int w6 = 6 * width;
-		const int w7 = 7 * width;
-		int j;
+		const int w7 = 7 * width;	
 		
-		for (j = range.start; j != range.end; j++)
+		for (int j = range.start; j != range.end; j++)
 		{
 			Mat patch(Size(8, 8), CV_32F);
 			float* ptch = patch.ptr<float>(0);
@@ -196,6 +193,7 @@ public:
 			float* s0 = &src[width*j];
 			float* d0 = &dest[width*j];
 			const int sz = sizeof(float) * 8;
+
 			for (int i = 0; i < wstep; i++)
 			{
 				memcpy(ptch, s0, sz);
@@ -245,7 +243,6 @@ private:
 public:
 	DenoiseDCTShrinkageInvorker4x4(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
-		;
 	}
 
 	virtual void operator() (const Range& range) const
@@ -257,9 +254,8 @@ public:
 		const int w2 = 2 * width;
 		const int w3 = 3 * width;
 
-		int j;
 		Mat buff(Size(4, 4), CV_32F); Mat mask;
-		for (j = range.start; j != range.end; j++)
+		for (int j = range.start; j != range.end; j++)
 		{
 			Mat patch(Size(4, 4), CV_32F);
 			float* ptch = patch.ptr<float>(0);
@@ -306,7 +302,6 @@ private:
 public:
 	DenoiseDCTShrinkageInvorker2x2(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
-		;
 	}
 	virtual void operator() (const Range& range) const
 	{
@@ -315,9 +310,7 @@ public:
 		const int hstep = height - 2 + 1;
 		const int wstep = width - 2 + 1;
 
-		int j;
-
-		for (j = range.start; j != range.end; j++)
+		for (int j = range.start; j != range.end; j++)
 		{
 			Mat patch(Size(4, 2), CV_32F);
 			float* ptch = patch.ptr<float>(0);
@@ -1746,6 +1739,101 @@ void RedundantDXTDenoise::decorrelateColorForward(float* src, float* dest, int w
 	}
 }
 
+void RedundantDXTDenoise::body(float *src, float* dest, float Th)
+{
+	int v = getNumThreads();
+	int c = getNumberOfCPUs();
+	int thread = v/c;
+
+	if (basis == BASIS::DCT)
+	{
+		if (isSSE)
+		{
+			if (patch_size.width == 2)
+			{
+				DenoiseDCTShrinkageInvorker2x2 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork);
+			}
+			else if (patch_size.width == 4)
+			{
+				DenoiseDCTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, 12.0);
+			}
+			else if (patch_size.width == 8)
+			{
+				DenoiseDCTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
+			}
+			else if (patch_size.width == 16)
+			{
+				RDCTThresholdingInvorker16x16 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
+			}
+			else
+			{
+				DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
+				parallel_for_(Range(0, size.height - patch_size.height), invork);
+			}
+		}
+		else
+		{
+			DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
+			parallel_for_(Range(0, size.height - patch_size.height), invork);
+		}
+	}
+	else if (basis == BASIS::DHT)
+	{
+		if (isSSE)
+		{
+			if (patch_size.width == 2)
+			{
+				//2x2 is same as DCT
+				DenoiseDCTShrinkageInvorker2x2 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork);
+			}
+			else if (patch_size.width == 4)
+			{
+				DenoiseDHTShrinkageInvorker4x4 invork(src,dest,Th, size.width,size.height);			
+				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
+			}
+			else if (patch_size.width == 8)
+			{
+				DenoiseDHTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork);
+			}
+			else if (patch_size.width == 16)
+			{
+				DenoiseDHTShrinkageInvorker16x16 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork);
+			}
+			else
+			{
+				DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
+				parallel_for_(Range(0, size.height - patch_size.height), invork);
+			}
+		}
+		else
+		{
+			DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
+			parallel_for_(Range(0, size.height - patch_size.height), invork);
+		}
+	}
+	else if (basis == BASIS::DWT)
+	{
+		if (patch_size.width == 4)
+		{
+			DenoiseDWTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height);
+			//DenoiseDHTShrinkageInvorker4x4S invork(src,dest,Th, size.width,size.height);			
+			parallel_for_(Range(0, size.height - patch_size.height), invork);
+		}
+		else if (patch_size.width == 8)
+		{
+			DenoiseDWTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
+			parallel_for_(Range(0, size.height - patch_size.height), invork);
+		}
+	}
+}
+
 void RedundantDXTDenoise::body(float *src, float* dest, float* wmap, float Th)
 {
 	if (basis == BASIS::DHT)
@@ -1769,7 +1857,7 @@ void RedundantDXTDenoise::body(float *src, float* dest, float* wmap, float Th)
 			}
 			else if (patch_size.width == 16)
 			{
-				DenoiseDCTShrinkageInvorker16x16 invork(src, dest, Th, size.width, size.height);
+				RDCTThresholdingInvorker16x16 invork(src, dest, Th, size.width, size.height);
 				parallel_for_(Range(0, size.height - patch_size.height), invork);
 			}
 			else
@@ -1838,101 +1926,6 @@ void RedundantDXTDenoise::body(float *src, float* dest, float* wmap, float Th)
 	}
 }
 
-void RedundantDXTDenoise::body(float *src, float* dest, float Th)
-{
-	int v = getNumThreads();
-	int c = getNumberOfCPUs();
-	int thread = v/c;
-
-	if (basis == BASIS::DCT)
-	{
-		if (isSSE)
-		{
-			if (patch_size.width == 2)
-			{
-				DenoiseDCTShrinkageInvorker2x2 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else if (patch_size.width == 4)
-			{
-				DenoiseDCTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12.0);
-			}
-			else if (patch_size.width == 8)
-			{
-				DenoiseDCTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
-			}
-			else if (patch_size.width == 16)
-			{
-				DenoiseDCTShrinkageInvorker16x16 invork(src, dest, Th, size.width, size.height);
-				//parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
-			}
-			else
-			{
-				DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-		}
-		else
-		{
-			DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-	}
-	else if (basis == BASIS::DHT)
-	{
-		if (isSSE)
-		{
-			if (patch_size.width == 2)
-			{
-				//2x2 is same as DCT
-				DenoiseDCTShrinkageInvorker2x2 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else if (patch_size.width == 4)
-			{
-				DenoiseDHTShrinkageInvorker4x4 invork(src,dest,Th, size.width,size.height);			
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
-			}
-			else if (patch_size.width == 8)
-			{
-				DenoiseDHTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else if (patch_size.width == 16)
-			{
-				DenoiseDHTShrinkageInvorker16x16 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else
-			{
-				DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-		}
-		else
-		{
-			DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-	}
-	else if (basis == BASIS::DWT)
-	{
-		if (patch_size.width == 4)
-		{
-			DenoiseDWTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height);
-			//DenoiseDHTShrinkageInvorker4x4S invork(src,dest,Th, size.width,size.height);			
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-		else if (patch_size.width == 8)
-		{
-			DenoiseDWTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-	}
-}
 
 void RedundantDXTDenoise::body(float *src, float* dest, float Th, int dr)
 {

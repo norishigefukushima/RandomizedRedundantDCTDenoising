@@ -639,11 +639,11 @@ void fDCT16x16_threshold_keep00_iDCT16x16(const float* src, float* dest, float t
 void fDCT16x16(const float* src, float* dest)
 {
 	fdct161d_sse(src, dest);
-	//fdct16_1d(src, dest);
+	//fdct161d_base(src, dest);
 	transpose16x16(dest);
 
 	fdct161d_sse(dest, dest);
-	//fdct16_1d(dest, dest);
+	//fdct161d_base(dest, dest);
 	transpose16x16(dest);
 }
 

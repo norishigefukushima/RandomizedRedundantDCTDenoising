@@ -70,6 +70,6 @@ public:
 	{
 	}
 	virtual void operator()(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
-	void RandomizedRedundantDXTDenoise::hardwareSubsampling(cv::Mat& src_, cv::Mat& dest, float sigma, cv::Size psize, BASIS transform_basis);
-
+	void RandomizedRedundantDXTDenoise::interlace(cv::Mat& src_, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT, SAMPLING sampleType = SAMPLING::LATTICE, int d = -1);
+	void div(float* inplace0, float* inplace1, float* inplace2, float* count, const int size1);
 };

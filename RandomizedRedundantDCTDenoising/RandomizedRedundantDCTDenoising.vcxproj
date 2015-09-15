@@ -143,6 +143,7 @@
     <ClCompile Include="dct_simd.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="RandomizedRedundantDXTDenoise.cpp" />
+    <ClCompile Include="RandomizedRedundantDXTDenoiseOverParallerization.cpp" />
     <ClCompile Include="RedundantDXTDenoise.cpp" />
     <ClCompile Include="transpose_simd.cpp" />
     <ClCompile Include="walsh_hadamard_simd.cpp" />
