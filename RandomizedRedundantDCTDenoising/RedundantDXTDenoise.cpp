@@ -1867,7 +1867,7 @@ void RedundantDXTDenoise::body(float *src, float* dest, float Th)
 			{
 				DenoiseDCTShrinkageInvorker16x16 invork(src, dest, Th, size.width, size.height);
 				//parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 24);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
 			}
 			else
 			{

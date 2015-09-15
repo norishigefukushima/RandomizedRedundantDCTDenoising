@@ -5,6 +5,10 @@ using namespace cv;
 using namespace cp;
 using namespace lab;
 
+void fDCT8x8(const float* s, float* d);
+void iDCT8x8(const float* s, float* d);
+void iDCT8x8GT(const float* s, float* d);
+void fDCT8x8GT(const float* s, float* d);
 int main()
 {
 	Mat src_ = imread("img/kodim03.png");
@@ -15,7 +19,7 @@ int main()
 	Mat dest2;
 	float sigma = 20.f;
 	addNoise(src, noise, sigma);
-	int iteration = 10000000000;
+	int iteration = 10000000;
 
 	//cout << YPSNR(src, noise) << endl;
 	RedundantDXTDenoise dctDenoise;
@@ -23,19 +27,66 @@ int main()
 	RandomizedRedundantDXTDenoise rrdct;
 
 	//dctDenoise.isSSE = false;
-	for (int i = 0; i < iteration; i++)
+	Mat c = src(Rect(100, 29, 8, 8));
+	Mat a(8, 8, CV_32F);;
+	Mat b(8, 8, CV_32F);
+	Mat d(8, 8, CV_32F);
+	c.convertTo(a, CV_32F);
+	c.convertTo(b, CV_32F);
+	c.convertTo(d, CV_32F);
+	
 	{
-		//CalcTime t("8x8 R-DCT");
-		//rrdct(noise, dest, sigma, Size(8, 8));
-		//showMatInfo(dest);
-		//noise.copyTo(dest);
-		//
-		//dctDenoise(noise, dest, sigma, Size(8, 8));
-		dctDenoise(noise, dest, sigma, Size(16, 16));
-		//guiAlphaBlend(src, dest);
-		cout << YPSNR(src, dest) << endl;
-		imshow("test", dest); waitKey(1);
+		/*
+		{
+			CalcTime t("fDCT");
+			for (int i = 0; i < iteration; i++)
+			{
+				fDCT8x8(a.ptr<float>(0), b.ptr<float>(0));
+			}
+		}
+		{
+			CalcTime t("iDCT");
+			for (int i = 0; i < iteration; i++)
+			{
+				iDCT8x8(a.ptr<float>(0), b.ptr<float>(0));
+			}
+		}
+		{
+			CalcTime t("fDCT GT");
+			for (int i = 0; i < iteration; i++)
+			{
+				fDCT8x8GT(a.ptr<float>(0), b.ptr<float>(0));
+			}
+		}
+		{
+			CalcTime t("iDCT GT");
+			for (int i = 0; i < iteration; i++)
+			{
+				iDCT8x8GT(a.ptr<float>(0), b.ptr<float>(0));
+			}
+		}
+		getchar();
+		*/
+		Stat st;
+		CalcTime t("fDCT", 0,false);
+		for (int i = 0; i < iteration; i++)
+		{
+			t.start();
+			//rrdct(noise, dest, sigma, Size(8, 8));
+			//showMatInfo(dest);
+			//noise.copyTo(dest);
+			//
+			dctDenoise(noise, dest, sigma, Size(8, 8));
+			st.push_back(t.getTime());
+			//dctDenoise(noise, dest, sigma, Size(8, 8));
+			//guiAlphaBlend(src, dest);
+			cout << YPSNR(src, dest) << endl;
+			//imshow("test", dest); waitKey(1);
+			
+			cout<<st.getMedian() << "ms"<<endl;
+		}
 	}
+	//getchar();
 	cout << YPSNR(src, dest) << endl;
 	/*
 	for (int i = 0; i < iteration; i++)
