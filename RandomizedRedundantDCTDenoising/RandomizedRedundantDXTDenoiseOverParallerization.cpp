@@ -50,13 +50,13 @@ void Hadamard2D16x16(float* src);
 static void computeRandomizedCoutMap(Mat& dest, Mat& mask, Size patch_size)
 {
 	const int width = dest.cols;
-	for (int j = 0; j < dest.rows - patch_size.height + 1; j++)
+	for (int j = 0; j < dest.rows - patch_size.height; j++)
 	{
 		float* s0 = dest.ptr<float>(j);
 		uchar* msk = mask.ptr<uchar>(j);
 		if (patch_size.width == 16)
 		{
-			for (int i = 0; i < dest.cols - patch_size.width + 1; i++)
+			for (int i = 0; i < dest.cols - patch_size.width ; i++)
 			{
 				if (msk[i])
 				{
@@ -88,7 +88,7 @@ static void computeRandomizedCoutMap(Mat& dest, Mat& mask, Size patch_size)
 		}
 		else if (patch_size.width == 8)
 		{
-			for (int i = 0; i < dest.cols - patch_size.width + 1; i++)
+			for (int i = 0; i < dest.cols - patch_size.width; i++)
 			{
 				if (msk[i])
 				{
@@ -101,6 +101,41 @@ static void computeRandomizedCoutMap(Mat& dest, Mat& mask, Size patch_size)
 						d += 4;
 						sp1 = _mm_loadu_ps(d);
 						_mm_storeu_ps(d, _mm_add_ps(sp1, mones));
+					}
+				}
+				s0++;
+			}
+		}
+		else if (patch_size.width == 4)
+		{
+			for (int i = 0; i < dest.cols - patch_size.width; i++)
+			{
+				if (msk[i])
+				{
+					const __m128 mones = _mm_set1_ps(1.0);
+					for (int jp = 0; jp < 4; jp++)
+					{
+						float* d = &s0[(jp)*width];
+						__m128 sp1 = _mm_loadu_ps(d);
+						_mm_storeu_ps(d, _mm_add_ps(sp1, mones));
+					}
+				}
+				s0++;
+			}
+		}
+		else
+		{
+			for (int i = 0; i < dest.cols - patch_size.width; i++)
+			{
+				if (msk[i])
+				{	
+					for (int jp = 0; jp < patch_size.height; jp++)
+					{
+						float* d = &s0[(jp)*width];
+						for (int ip = 0; ip < patch_size.width; ip++)
+						{
+							d[ip] += 1.f;
+						}
 					}
 				}
 				s0++;
@@ -127,8 +162,8 @@ public:
 	virtual void operator() (const Range& range) const
 	{
 		const int size1 = width * height;
-		const int hstep = height - 16 + 1;
-		const int wstep = width - 16 + 1;
+		const int hstep = height - 16;
+		const int wstep = width - 16;
 		const int w1 = 1 * width;
 		const int w2 = 2 * width;
 		const int w3 = 3 * width;
@@ -235,8 +270,8 @@ public:
 	virtual void operator() (const Range& range) const
 	{
 		const int size1 = width * height;
-		const int hstep = height - 8 + 1;
-		const int wstep = width - 8 + 1;
+		const int hstep = height - 8;
+		const int wstep = width - 8;
 		const int w1 = 1 * width;
 		const int w2 = 2 * width;
 		const int w3 = 3 * width;
@@ -366,6 +401,153 @@ void RandomizedRedundantDXTDenoise::div(float* inplace0, float* inplace1, float*
 	}
 }
 
+void RandomizedRedundantDXTDenoise::div(float* inplace0, float* inplace1, float* inplace2, float* inplace3, float* count, const int size1)
+{
+	float* s0 = inplace0;
+	float* s1 = inplace1;
+	float* s2 = inplace2;
+	float* s3 = inplace3;
+	float* c = count;
+
+	for (int i = 0; i < size1; i += 4)
+	{
+		__m128 md0 = _mm_load_ps(s0);
+		__m128 md1 = _mm_load_ps(s1);
+		__m128 md2 = _mm_load_ps(s2);
+		__m128 md3 = _mm_load_ps(s3);
+		__m128 mdiv = _mm_rcp_ps(_mm_load_ps(c));
+		_mm_store_ps(s0, _mm_mul_ps(md0, mdiv));
+		_mm_store_ps(s1, _mm_mul_ps(md1, mdiv));
+		_mm_store_ps(s2, _mm_mul_ps(md2, mdiv));
+		_mm_store_ps(s3, _mm_mul_ps(md3, mdiv));
+
+		s0 += 4;
+		s1 += 4;
+		s2 += 4;
+		s3 += 4;
+		c += 4;
+	}
+}
+
+void redundantColorTransformFwd(Mat& src, Mat& dest)
+{
+	dest.create(Size(src.cols, src.rows * 4), CV_32F);
+
+	float* s = src.ptr<float>(0);
+	float* d = dest.ptr<float>(0);
+
+	const int size = src.cols*src.rows;
+	const int step0 = 0 * size;
+	const int step1 = 1 * size;
+	const int step2 = 2 * size;
+	const int step3 = 3 * size;
+	for (int i = 0; i < src.size().area(); i++)
+	{
+		d[i + step0] = s[3 * i + 2] + s[3 * i + 1] + s[3 * i + 0];
+		d[i + step1] = s[3 * i + 2] - s[3 * i + 1];
+		d[i + step2] = s[3 * i + 1] - s[3 * i + 0];
+		d[i + step3] = -s[3 * i + 2] + s[3 * i + 0];
+	}
+}
+
+void redundantColorTransformInv(Mat& src, Mat& dest)
+{
+	if(dest.empty())dest.create(Size(src.cols, src.rows), CV_32FC3);
+
+	const int size = src.cols*src.rows/4;
+	const int step0 = 0 * size;
+	const int step1 = 1 * size;
+	const int step2 = 2 * size;
+	const int step3 = 3 * size;
+
+	float* s = src.ptr<float>(0);
+	float* d = dest.ptr<float>(0);
+	for (int i = 0; i < src.size().area()/4; i++)
+	{
+		d[3 * i + 2] = 0.33333f*(s[i + step0] + s[i + step1] - s[i + step3]);
+		d[3 * i + 1] = 0.33333f*(s[i + step0] - s[i + step1] + s[i + step2]);
+		d[3 * i + 0] = 0.33333f*(s[i + step0] - s[i + step2] + s[i + step3]);
+	}
+}
+
+void RandomizedRedundantDXTDenoise::interlace2(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
+{
+	Mat src;
+	if (src_.depth() != CV_32F)src_.convertTo(src, CV_MAKETYPE(CV_32F, src_.channels()));
+	else src = src_;
+
+	basis = transform_basis;
+	if (src.size() != size || src.channels() != channel || psize != patch_size)
+	{
+		init(src.size(), src.channels(), psize);
+	}
+
+	int w = src.cols + 2 * patch_size.width;
+	w = ((4 - w % 4) % 4);
+
+	copyMakeBorder(src, im, psize.height, patch_size.height, patch_size.width, patch_size.width + w, cv::BORDER_REPLICATE);
+
+	const int width = im.cols;
+	const int height = im.rows;
+	const int size1 = width*height;
+	float* ipixels;
+	float* opixels;
+
+	// Threshold
+	float Th = getThreshold(sigma);
+	Mat cmap = Mat::zeros(im.size(), CV_32F);
+	{
+		if (channel == 3)
+		{
+			redundantColorTransformFwd(im, buff);
+		}
+		else
+		{
+			buff = im.clone();
+		}
+
+		sum = Mat::zeros(buff.size(), CV_32F);
+		ipixels = buff.ptr<float>(0);
+		opixels = sum.ptr<float>(0);
+	}
+
+	getSamplingFromLUT(samplingMap);
+	{
+		if (channel == 3)
+		{
+			body(ipixels + 0 * size1, opixels + 0 * size1, Th);
+			body(ipixels + 1 * size1, opixels + 1 * size1, Th);
+			body(ipixels + 2 * size1, opixels + 2 * size1, Th);
+			body(ipixels + 3 * size1, opixels + 3 * size1, Th);
+		}
+		else
+		{
+			body(ipixels, opixels, Th);
+		}
+		computeRandomizedCoutMap(cmap, samplingMap, patch_size);
+	}
+	div(opixels, opixels + size1, opixels + 2 * size1, opixels + 3 * size1, cmap.ptr<float>(0), size1);
+
+	{
+		// inverse 3-point DCT transform in the color dimension
+		if (channel == 3)
+		{
+			redundantColorTransformInv(sum, im);
+		}
+		else
+		{
+			im = sum;
+		}
+
+		Mat im2;
+		if (src_.depth() != CV_32F) im.convertTo(im2, src_.type());
+		else im2 = im;
+
+		Mat(im2(Rect(patch_size.width, patch_size.height, src.cols, src.rows))).copyTo(dest);
+	}
+}
+
+
 void RandomizedRedundantDXTDenoise::interlace(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
 {
 	Mat src;
@@ -393,9 +575,6 @@ void RandomizedRedundantDXTDenoise::interlace(Mat& src_, Mat& dest, float sigma,
 	float Th = getThreshold(sigma);
 	Mat cmap = Mat::zeros(im.size(), CV_32F);
 	{
-#ifdef _CALCTIME_
-		CalcTime t("color");
-#endif
 		if (channel == 3)
 		{
 			cvtColorBGR2PLANE(im, buff);
@@ -414,15 +593,12 @@ void RandomizedRedundantDXTDenoise::interlace(Mat& src_, Mat& dest, float sigma,
 			decorrelateColorForward(ipixels, ipixels, width, height);
 		}
 	}
-	
+
 	//setSampling(SAMPLING::FULL, 0);
 	////if (d<0) setSamplingMap(sampleType, psize.width / 3);
 	//else setSampling(sampleType, d);
 	getSamplingFromLUT(samplingMap);
 	{
-#ifdef _CALCTIME_
-		CalcTime t("body");
-#endif
 		if (channel == 3)
 		{
 			body(ipixels, opixels, Th);
@@ -438,9 +614,6 @@ void RandomizedRedundantDXTDenoise::interlace(Mat& src_, Mat& dest, float sigma,
 	div(opixels, opixels + size1, opixels + 2 * size1, cmap.ptr<float>(0), size1);
 
 	{
-#ifdef _CALCTIME_
-		CalcTime t("inv color");
-#endif
 		// inverse 3-point DCT transform in the color dimension
 		if (channel == 3)
 		{

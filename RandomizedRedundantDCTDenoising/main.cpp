@@ -20,9 +20,10 @@ void guiDenoise(Mat& src, string wname = "denoise")
 	int key = 0;
 	RedundantDXTDenoise dctDenoise;
 	RandomizedRedundantDXTDenoise rrdct;
-	rrdct.generateSamplingMaps(src.size(), Size(8, 8), 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
+	rrdct.generateSamplingMaps(src.size(), Size(16, 16), 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
 	while (key!='q')
 	{
+		if (key=='n') addNoise(src, noise, snoise);
 		{
 			CalcTime t;
 			if (sw == 0) dctDenoise(noise, dest, sigma_c / 10.0, Size(8, 8));
@@ -33,19 +34,16 @@ void guiDenoise(Mat& src, string wname = "denoise")
 			}
 			else if (sw == 2)
 			{
-				rrdct.generateSamplingMaps(src.size(), Size(16, 16), 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
-				rrdct.interlace(noise, dest, sigma_c / 10.0, Size(16, 16));
+				rrdct.generateSamplingMaps(src.size(), Size(8, 8), 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
+				rrdct.interlace2(noise, dest, sigma_c / 10.0, Size(8, 8));
+
+				//rrdct.generateSamplingMaps(src.size(), Size(16, 16), 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
+				//rrdct.interlace(noise, dest, sigma_c / 10.0, Size(16, 16));
 			}
 			else if (sw == 3)
 			{
 				nonLocalMeansFilter(noise, dest, 3, 2 * r + 1, 1.4*sigma_c / 10.0);
 			}
-			//bilateralFilter(noise, dest, 2*r+1, sigma_c / 10.0, sigma_s / 10.0, BORDER_REFLECT);
-			//
-			
-			//rrdct.interlace(noise, dest, sigma_c / 10.0, Size(8, 8));
-
-			
 		}
 		cout << YPSNR(src, dest) << endl;
 		imshow(wname, dest);
@@ -55,10 +53,11 @@ void guiDenoise(Mat& src, string wname = "denoise")
 
 int main()
 {
-	Mat src_ = imread("img/kodim04.png");
+	Mat src_ = imread("img/kodim07.png");
 	Mat src;
 	resize(src_, src, Size(1024, 1024));
 	guiDenoise(src);
+
 	Mat noise;
 	Mat dest;
 	Mat dest2;
@@ -68,7 +67,6 @@ int main()
 
 	//cout << YPSNR(src, noise) << endl;
 	RedundantDXTDenoise dctDenoise;
-
 	RandomizedRedundantDXTDenoise rrdct;
 
 	//dctDenoise.isSSE = false;

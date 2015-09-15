@@ -71,7 +71,9 @@ public:
 
 	virtual void operator()(cv::Mat& src, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
 	void RandomizedRedundantDXTDenoise::interlace(cv::Mat& src_, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
+	void RandomizedRedundantDXTDenoise::interlace2(cv::Mat& src_, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
 	void div(float* inplace0, float* inplace1, float* inplace2, float* count, const int size1);
+	void div(float* inplace0, float* inplace1, float* inplace2, float* inplace3, float* count, const int size1);
 
 protected:
 	virtual void body(float *src, float* dest, float Th);
