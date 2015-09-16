@@ -21,6 +21,9 @@
 
 double YPSNR(cv::InputArray src1, cv::InputArray src2);
 void addNoise(cv::InputArray src, cv::OutputArray dest, double sigma, double solt_papper_ratio = 0.0);
+
+void cvtColorBGR2DCT3PLANE_32f(const cv::Mat& src, cv::Mat& dest);
+void cvtColorPLANEDCT32BGR_32f(const cv::Mat& src, cv::Mat& dest);
 enum
 {
 	TIME_AUTO = 0,
@@ -101,9 +104,6 @@ protected:
 
 	void div(float* inplace0, float* w0, const int size1);
 	void div(float* inplace0, const int patch_area, const int size1);
-
-	void decorrelateColorForward(float* src, float* dest, int width, int height);
-	void decorrelateColorInvert(float* src, float* dest, int width, int height);
 };
 
 class RRDXTDenoise : public RedundantDXTDenoise
@@ -114,8 +114,6 @@ public:
 		FULL = 0,
 		LATTICE,
 		POISSONDISK,
-		RANDOM_IMAGE_LUT,
-		RANDOM_SAMPLE_LUT
 	};
 
 	RRDXTDenoise();

@@ -1606,116 +1606,6 @@ void RedundantDXTDenoise::div(float* inplace0, const int patch_area, const int s
 	}
 }
 
-void RedundantDXTDenoise::decorrelateColorInvert(float* src, float* dest, int width, int height)
-{
-	const float c00 = 0.57735f;
-	const float c01 = 0.707107f;
-	const float c02 = 0.408248f;
-	const float c12 = -0.816497f;
-
-	const int size1 = width*height;
-	const int size2 = 2 * size1;
-
-
-#pragma omp parallel for
-	for (int j = 0; j < height; j++)
-	{
-		float* s0 = src + width*j;
-		float* s1 = s0 + size1;
-		float* s2 = s0 + size2;
-		float* d0 = dest + width*j;
-		float* d1 = d0 + size1;
-		float* d2 = d0 + size2;
-
-		const __m128 mc00 = _mm_set1_ps(c00);
-		const __m128 mc01 = _mm_set1_ps(c01);
-		const __m128 mc02 = _mm_set1_ps(c02);
-		const __m128 mc12 = _mm_set1_ps(c12);
-		int i = 0;
-		//#ifdef _SSE
-		for (i = 0; i < width - 4; i += 4)
-		{
-			__m128 ms0 = _mm_load_ps(s0);
-			__m128 ms1 = _mm_load_ps(s1);
-			__m128 ms2 = _mm_load_ps(s2);
-
-			__m128 cs000 = _mm_mul_ps(mc00, ms0);
-			__m128 cs002 = _mm_add_ps(cs000, _mm_mul_ps(mc02, ms2));
-			_mm_store_ps(d0, _mm_add_ps(cs002, _mm_mul_ps(mc01, ms1)));
-			_mm_store_ps(d1, _mm_add_ps(cs000, _mm_mul_ps(mc12, ms2)));
-			_mm_store_ps(d2, _mm_sub_ps(cs002, _mm_mul_ps(mc01, ms1)));
-
-			d0 += 4, d1 += 4, d2 += 4, s0 += 4, s1 += 4, s2 += 4;
-		}
-		//#endif
-		for (; i < width; i++)
-		{
-			float v0 = c00* *s0 + c01* *s1 + c02* *s2;
-			float v1 = c00* *s0 + c12* *s2;
-			float v2 = c00* *s0 - c01* *s1 + c02* *s2;
-
-			*d0++ = v0;
-			*d1++ = v1;
-			*d2++ = v2;
-			s0++, s1++, s2++;
-		}
-	}
-}
-
-void RedundantDXTDenoise::decorrelateColorForward(float* src, float* dest, int width, int height)
-{
-	const float c0 = 0.57735f;
-	const float c1 = 0.707107f;
-	const float c20 = 0.408248f;
-	const float c21 = -0.816497f;
-
-	const int size1 = width*height;
-	const int size2 = 2 * size1;
-
-#pragma omp parallel for
-	for (int j = 0; j < height; j++)
-	{
-		float* s0 = src + width*j;
-		float* s1 = s0 + size1;
-		float* s2 = s0 + size2;
-		float* d0 = dest + width*j;
-		float* d1 = d0 + size1;
-		float* d2 = d0 + size2;
-		const __m128 mc0 = _mm_set1_ps(c0);
-		const __m128 mc1 = _mm_set1_ps(c1);
-		const __m128 mc20 = _mm_set1_ps(c20);
-		const __m128 mc21 = _mm_set1_ps(c21);
-		int i = 0;
-		//#ifdef _SSE
-		for (i = 0; i < width - 4; i += 4)
-		{
-			__m128 ms0 = _mm_load_ps(s0);
-			__m128 ms1 = _mm_load_ps(s1);
-			__m128 ms2 = _mm_load_ps(s2);
-
-			__m128 ms02a = _mm_add_ps(ms0, ms2);
-
-			_mm_store_ps(d0, _mm_mul_ps(mc0, _mm_add_ps(ms1, ms02a)));
-			_mm_store_ps(d1, _mm_mul_ps(mc1, _mm_sub_ps(ms0, ms2)));
-			_mm_store_ps(d2, _mm_add_ps(_mm_mul_ps(mc20, ms02a), _mm_mul_ps(mc21, ms1)));
-
-			d0 += 4, d1 += 4, d2 += 4, s0 += 4, s1 += 4, s2 += 4;
-		}
-		//#endif
-		for (; i < width; i++)
-		{
-			float v0 = c0*(*s0 + *s1 + *s2);
-			float v1 = c1*(*s0 - *s2);
-			float v2 = (*s0 + *s2)*c20 + *s1 *c21;
-
-			*d0++ = v0;
-			*d1++ = v1;
-			*d2++ = v2;
-			s0++, s1++, s2++;
-		}
-	}
-}
-
 void RedundantDXTDenoise::body(float *src, float* dest, float Th)
 {
 	int numThreads = getNumThreads();
@@ -2161,7 +2051,7 @@ void RedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psi
 #endif
 		if (channel == 3)
 		{
-			cvtColorBGR2PLANE(im, buff);
+			cvtColorBGR2DCT3PLANE_32f(im, buff);
 		}
 		else
 		{
@@ -2172,11 +2062,6 @@ void RedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psi
 		else sum.setTo(0);
 		ipixels = buff.ptr<float>(0);
 		opixels = sum.ptr<float>(0);
-
-		if (channel == 3)
-		{
-			decorrelateColorForward(ipixels, ipixels, width, height);
-		}
 	}
 
 	{
@@ -2208,13 +2093,13 @@ void RedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psi
 			float* d1 = &opixels[size1];
 			float* d2 = &opixels[2 * size1];
 			div(d0, d1, d2, patch_size.area(), size1);
-		}
+	}
 		else
 		{
 			float* d0 = &opixels[0];
 			div(d0, patch_size.area(), size1);
 		}
-	}
+}
 
 	{
 #ifdef _CALCTIME_
@@ -2223,9 +2108,8 @@ void RedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psi
 		// inverse 3-point DCT transform in the color dimension
 		if (channel == 3)
 		{
-			decorrelateColorInvert(opixels, opixels, width, height);
-			cvtColorPLANE2BGR(sum, im);
-		}
+			cvtColorPLANEDCT32BGR_32f(sum, im);
+	}
 		else
 		{
 			im = sum;

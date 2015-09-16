@@ -391,6 +391,137 @@ void cvtColorBGR2PLANE_8u(const Mat& src, Mat& dest)
 	}
 }
 
+void cvtColorPLANEDCT32BGR_32f(const Mat& src, Mat& dest)
+{
+	const float c00 = 0.57735f;
+	const float c01 = 0.707107f;
+	const float c02 = 0.408248f;
+	const float c12 = -0.816497f;
+
+	const int height = src.rows / 3;
+	const int width = src.cols;
+	const int size1 = width*height;
+	const int size2 = 2 * size1;
+
+	float* s = (float*)src.ptr<float>(0);
+//#pragma omp parallel for
+	for (int j = 0; j < height; j++)
+	{
+		float* d = dest.ptr<float>(j);
+
+		float* s0 = s + width*j;
+		float* s1 = s0 + size1;
+		float* s2 = s0 + size2;
+		const __m128 mc00 = _mm_set1_ps(c00);
+		const __m128 mc01 = _mm_set1_ps(c01);
+		const __m128 mc02 = _mm_set1_ps(c02);
+		const __m128 mc12 = _mm_set1_ps(c12);
+		int i = 0;
+		for (i = 0; i < width - 4; i += 4)
+		{
+			__m128 ms0 = _mm_load_ps(s0);
+			__m128 ms1 = _mm_load_ps(s1);
+			__m128 ms2 = _mm_load_ps(s2);
+
+			__m128 cs000 = _mm_mul_ps(mc00, ms0);
+			__m128 cs002 = _mm_add_ps(cs000, _mm_mul_ps(mc02, ms2));
+
+			__m128 bval = _mm_add_ps(cs002, _mm_mul_ps(mc01, ms1));
+			__m128 gval = _mm_add_ps(cs000, _mm_mul_ps(mc12, ms2));
+			__m128 rval = _mm_sub_ps(cs002, _mm_mul_ps(mc01, ms1));
+
+			__m128 a = _mm_shuffle_ps(rval, rval, _MM_SHUFFLE(3, 0, 1, 2));
+			__m128 b = _mm_shuffle_ps(bval, bval, _MM_SHUFFLE(1, 2, 3, 0));
+			__m128 c = _mm_shuffle_ps(gval, gval, _MM_SHUFFLE(2, 3, 0, 1));
+
+			_mm_stream_ps((d), _mm_blend_ps(_mm_blend_ps(b, a, 4), c, 2));
+			_mm_stream_ps((d + 4), _mm_blend_ps(_mm_blend_ps(c, b, 4), a, 2));
+			_mm_stream_ps((d + 8), _mm_blend_ps(_mm_blend_ps(a, c, 4), b, 2));
+			d += 12;
+			s0 += 4, s1 += 4, s2 += 4;
+		}
+		for (; i < width; i++)
+		{
+			float v0 = c00* *s0 + c01* *s1 + c02* *s2;
+			float v1 = c00* *s0 + c12* *s2;
+			float v2 = c00* *s0 - c01* *s1 + c02* *s2;
+
+			d[0] = v0;
+			d[1] = v1;
+			d[2] = v2;
+			d+=3, s0++, s1++, s2++;
+		}
+	}
+}
+
+void cvtColorBGR2DCT3PLANE_32f(const Mat& src, Mat& dest)
+{
+	if (dest.empty() || dest.size() !=Size(src.cols, src.rows*3))
+	dest.create(Size(src.cols, src.rows * 3), CV_32F);
+
+	const int size = src.size().area();
+	const int ssesize = 3 * size - ((12 - (3 * size) % 12) % 12);
+	const int ssecount = ssesize / 12;
+	const float* s = src.ptr<float>(0);
+	float* B = dest.ptr<float>(0);//line by line interleave
+	float* G = dest.ptr<float>(src.rows);
+	float* R = dest.ptr<float>(2 * src.rows);
+
+	const float c0 = 0.57735f;
+	const float c1 = 0.707107f;
+	const float c20 = 0.408248f;
+	const float c21 = -0.816497f;
+	const __m128 mc0 = _mm_set1_ps(c0);
+	const __m128 mc1 = _mm_set1_ps(c1);
+	const __m128 mc20 = _mm_set1_ps(c20);
+	const __m128 mc21 = _mm_set1_ps(c21);
+//#pragma omp parallel for
+	for (int i = 0; i < ssecount; i++)
+	{
+		int v = 4*i;
+		int j = 12 * i;
+		const float* sp = &s[j];
+
+		__m128 a = _mm_loadu_ps(sp);
+		__m128 b = _mm_loadu_ps(sp + 4);
+		__m128 c = _mm_loadu_ps(sp + 8);
+
+		__m128 aa = _mm_shuffle_ps(a, a, _MM_SHUFFLE(1, 2, 3, 0));
+		aa = _mm_blend_ps(aa, b, 4);
+		__m128 cc = _mm_shuffle_ps(c, c, _MM_SHUFFLE(1, 3, 2, 0));
+		__m128 bbbb = _mm_blend_ps(aa, cc, 8);
+		
+		aa = _mm_shuffle_ps(a, a, _MM_SHUFFLE(3, 2, 0, 1));
+		__m128 bb = _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 3, 0, 1));
+		bb = _mm_blend_ps(bb, aa, 1);
+		cc = _mm_shuffle_ps(c, c, _MM_SHUFFLE(2, 3, 1, 0));
+		__m128 gggg = _mm_blend_ps(bb, cc, 8);
+
+		aa = _mm_shuffle_ps(a, a, _MM_SHUFFLE(3, 1, 0, 2));
+		bb = _mm_blend_ps(aa, b, 2);
+		cc = _mm_shuffle_ps(c, c, _MM_SHUFFLE(3, 0, 1, 2));
+		__m128 rrrr = _mm_blend_ps(bb, cc, 12);
+		
+		__m128 ms02a = _mm_add_ps(bbbb, rrrr);
+
+		_mm_storeu_ps((B+v), _mm_mul_ps(mc0, _mm_add_ps(gggg, ms02a)));
+		_mm_storeu_ps((G+v), _mm_mul_ps(mc1, _mm_sub_ps(bbbb, rrrr)));
+		_mm_storeu_ps((R+v), _mm_add_ps(_mm_mul_ps(mc20, ms02a), _mm_mul_ps(mc21, gggg)));
+	}
+	for (int i = ssesize; i < 3 * size; i += 3)
+	{
+		int v = i/3;
+
+		float v0 = c0*(s[i+0] + s[i+1] + s[i+2]);
+		float v1 = c1*(s[0] - s[2]);
+		float v2 = (s[0] + s[2])*c20 + s[1] *c21;
+		B[v] = v0;
+		G[v] = v1;
+		R[v] = v2;
+	}
+}
+
+
 void cvtColorBGR2PLANE_32f(const Mat& src, Mat& dest)
 {
 	dest.create(Size(src.cols, src.rows * 3), CV_32F);
@@ -632,5 +763,114 @@ void cvtColorPLANE2BGR(const Mat& src, Mat& dest)
 	if (src.depth() == CV_64F)
 	{
 		cvtColorPLANE2BGR_<double>(src, dest, CV_64F);
+	}
+}
+
+void decorrelateColorInvert(float* src, float* dest, int width, int height)
+{
+	const float c00 = 0.57735f;
+	const float c01 = 0.707107f;
+	const float c02 = 0.408248f;
+	const float c12 = -0.816497f;
+
+	const int size1 = width*height;
+	const int size2 = 2 * size1;
+
+//#pragma omp parallel for
+	for (int j = 0; j < height; j++)
+	{
+		float* s0 = src + width*j;
+		float* s1 = s0 + size1;
+		float* s2 = s0 + size2;
+		float* d0 = dest + width*j;
+		float* d1 = d0 + size1;
+		float* d2 = d0 + size2;
+
+		const __m128 mc00 = _mm_set1_ps(c00);
+		const __m128 mc01 = _mm_set1_ps(c01);
+		const __m128 mc02 = _mm_set1_ps(c02);
+		const __m128 mc12 = _mm_set1_ps(c12);
+		int i = 0;
+		//#ifdef _SSE
+		for (i = 0; i < width - 4; i += 4)
+		{
+			__m128 ms0 = _mm_load_ps(s0);
+			__m128 ms1 = _mm_load_ps(s1);
+			__m128 ms2 = _mm_load_ps(s2);
+
+			__m128 cs000 = _mm_mul_ps(mc00, ms0);
+			__m128 cs002 = _mm_add_ps(cs000, _mm_mul_ps(mc02, ms2));
+			_mm_store_ps(d0, _mm_add_ps(cs002, _mm_mul_ps(mc01, ms1)));
+			_mm_store_ps(d1, _mm_add_ps(cs000, _mm_mul_ps(mc12, ms2)));
+			_mm_store_ps(d2, _mm_sub_ps(cs002, _mm_mul_ps(mc01, ms1)));
+
+			d0 += 4, d1 += 4, d2 += 4, s0 += 4, s1 += 4, s2 += 4;
+		}
+		//#endif
+		for (; i < width; i++)
+		{
+			float v0 = c00* *s0 + c01* *s1 + c02* *s2;
+			float v1 = c00* *s0 + c12* *s2;
+			float v2 = c00* *s0 - c01* *s1 + c02* *s2;
+
+			*d0++ = v0;
+			*d1++ = v1;
+			*d2++ = v2;
+			s0++, s1++, s2++;
+		}
+	}
+}
+
+void decorrelateColorForward(float* src, float* dest, int width, int height)
+{
+	const float c0 = 0.57735f;
+	const float c1 = 0.707107f;
+	const float c20 = 0.408248f;
+	const float c21 = -0.816497f;
+
+	const int size1 = width*height;
+	const int size2 = 2 * size1;
+
+//#pragma omp parallel for
+	for (int j = 0; j < height; j++)
+	{
+		float* s0 = src + width*j;
+		float* s1 = s0 + size1;
+		float* s2 = s0 + size2;
+		float* d0 = dest + width*j;
+		float* d1 = d0 + size1;
+		float* d2 = d0 + size2;
+		const __m128 mc0 = _mm_set1_ps(c0);
+		const __m128 mc1 = _mm_set1_ps(c1);
+		const __m128 mc20 = _mm_set1_ps(c20);
+		const __m128 mc21 = _mm_set1_ps(c21);
+		int i = 0;
+		//#ifdef _SSE
+		for (i = 0; i < width - 4; i += 4)
+		{
+			__m128 ms0 = _mm_load_ps(s0);
+			__m128 ms1 = _mm_load_ps(s1);
+			__m128 ms2 = _mm_load_ps(s2);
+
+			__m128 ms02a = _mm_add_ps(ms0, ms2);
+
+			_mm_store_ps(d0, _mm_mul_ps(mc0, _mm_add_ps(ms1, ms02a)));
+			_mm_store_ps(d1, _mm_mul_ps(mc1, _mm_sub_ps(ms0, ms2)));
+			_mm_store_ps(d2, _mm_add_ps(_mm_mul_ps(mc20, ms02a), _mm_mul_ps(mc21, ms1)));
+
+			d0 += 4, d1 += 4, d2 += 4, s0 += 4, s1 += 4, s2 += 4;
+		}
+		//#endif
+		for (; i < width; i++)
+		{
+			float v0 = c0*(*s0 + *s1 + *s2);
+			float v1 = c1*(*s0 - *s2);
+			float v2 = (*s0 + *s2)*c20 + *s1 *c21;
+
+			*d0++ = v0;
+			*d1++ = v1;
+			*d2++ = v2;
+			s0++, s1++, s2++;
+		}
 	}
 }

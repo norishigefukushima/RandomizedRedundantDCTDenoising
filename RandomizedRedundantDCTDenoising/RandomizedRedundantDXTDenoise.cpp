@@ -1519,23 +1519,21 @@ void RRDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BAS
 	float Th = getThreshold(sigma);
 	Mat cmap = Mat::zeros(im.size(), CV_32F);
 	{
+		//CalcTime t;
 		if (channel == 3)
 		{
-			cvtColorBGR2PLANE(im, buff);
+			cvtColorBGR2DCT3PLANE_32f(im, buff);
 		}
 		else
 		{
 			buff = im.clone();
 		}
 
-		sum = Mat::zeros(buff.size(), CV_32F);
+		if (sum.size() != buff.size()) sum = Mat::zeros(buff.size(), CV_32F);
+		else sum.setTo(0);
+
 		ipixels = buff.ptr<float>(0);
 		opixels = sum.ptr<float>(0);
-
-		if (channel == 3)
-		{
-			decorrelateColorForward(ipixels, ipixels, width, height);
-		}
 	}
 
 	getSamplingFromLUT(samplingMap);
@@ -1559,8 +1557,7 @@ void RRDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BAS
 		// inverse 3-point DCT transform in the color dimension
 		if (channel == 3)
 		{
-			decorrelateColorInvert(opixels, opixels, width, height);
-			cvtColorPLANE2BGR(sum, im);
+			cvtColorPLANEDCT32BGR_32f(sum, im);
 		}
 		else
 		{
@@ -1577,11 +1574,11 @@ void RRDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BAS
 
 RRDXTDenoise::RRDXTDenoise()
 {
-	rng(cv::getCPUTickCount()); 
+	rng((uint)cv::getCPUTickCount());
 }
 
 RRDXTDenoise::RRDXTDenoise(cv::Size size, int color, cv::Size patch_size_) :RedundantDXTDenoise(size, color, patch_size_)
 {
-	rng(cv::getCPUTickCount());
+	rng((uint)cv::getCPUTickCount());
 	generateSamplingMaps(size, patch_size_, 20, 0, SAMPLING::FULL);
 }
