@@ -22,11 +22,13 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 	RedundantDXTDenoise dctDenoise;
 	RRDXTDenoise rrdct;
 	rrdct.generateSamplingMaps(src.size(), Size(16, 16), 1, r, RRDXTDenoise::SAMPLING::LATTICE);
+
+	bool isNoiseUpdate = false;
 	while (key != 'q')
 	{
 		int bsize = (int)pow(2.0, blksize);
 		Size block = Size(bsize, bsize);
-		if (key == 'n') addNoise(src, noise, snoise);
+		if (isNoiseUpdate) addNoise(src, noise, snoise);
 		{
 			CalcTime t;
 			if (sw == 0) dctDenoise(noise, dest, thresh / 10.f, block);
@@ -44,6 +46,12 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 			{
 				fastNlMeansDenoisingColored(noise, dest, h / 10.f, h_c / 10.f, 3, 2 * radius + 1);
 			}
+
+			if (key == 'n') isNoiseUpdate = (isNoiseUpdate) ? false: true;
+			if (key == 'h' || key == '?')
+			{
+				cout << " 'n' swichs flag for updating noise image or not " << endl;
+			}
 		}
 		cout << YPSNR(src, dest) << " dB" << endl;
 		imshow(wname, dest);
@@ -60,7 +68,7 @@ int main(int argc, const char *argv[])
 		guiDenoise(src, dest);
 	}
 
-	const String keys =
+	const string keys =
 	{
 		"{help h|   | print this message}"
 		"{@src  |   |src image}"

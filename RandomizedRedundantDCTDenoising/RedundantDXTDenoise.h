@@ -118,17 +118,15 @@ public:
 		RANDOM_SAMPLE_LUT
 	};
 
-	RRDXTDenoise(){ ; };
-	RRDXTDenoise(cv::Size size, int color, cv::Size patch_size_ = cv::Size(8, 8)) :RedundantDXTDenoise(size, color, patch_size_)
-	{
-		generateSamplingMaps(size, patch_size_, 20, 0, SAMPLING::FULL);
-	}
+	RRDXTDenoise();
+	RRDXTDenoise(cv::Size size, int color, cv::Size patch_size_ = cv::Size(8, 8));
+	
 
 	void generateSamplingMaps(cv::Size imageSize, cv::Size patch_size, int number_of_LUT, int d, SAMPLING sampleType = SAMPLING::POISSONDISK);
 
 	virtual void operator()(cv::Mat& src_, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
 	void colorredundunt(cv::Mat& src_, cv::Mat& dest, float sigma, cv::Size psize = cv::Size(8, 8), BASIS transform_basis = BASIS::DCT);
-
+	cv::RNG rng;
 protected:
 	void div(float* inplace0, float* inplace1, float* inplace2, float* count, const int size1);
 	void div(float* inplace0, float* inplace1, float* inplace2, float* inplace3, float* count, const int size1);

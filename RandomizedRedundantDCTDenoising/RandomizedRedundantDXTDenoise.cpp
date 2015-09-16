@@ -1282,7 +1282,6 @@ void setLattice(Mat& dest, int d, RNG& rng)
 
 void RRDXTDenoise::setSamplingMap(Mat& samplingMap, SAMPLING samplingType, int d)
 {
-	RNG rng;
 	Size s = Size(size.width + patch_size.width, size.height + patch_size.height);
 	switch (samplingType)
 	{
@@ -1305,7 +1304,6 @@ void RRDXTDenoise::setSamplingMap(Mat& samplingMap, SAMPLING samplingType, int d
 
 void RRDXTDenoise::generateSamplingMaps(Size size, Size psize, int number_of_LUT, int d, SAMPLING sampleType)
 {
-	RNG rng;
 	init(size, 3, psize);
 
 	samplingMapLUTs.clear();
@@ -1320,7 +1318,6 @@ void RRDXTDenoise::generateSamplingMaps(Size size, Size psize, int number_of_LUT
 
 void RRDXTDenoise::getSamplingFromLUT(Mat& samplingMap)
 {
-	RNG rng;
 	if ((int)samplingMapLUTs.size() == 0) generateSamplingMaps(size, patch_size, 20, 0, SAMPLING::FULL);
 	samplingMapLUTs[rng.uniform(0, (int)samplingMapLUTs.size())].copyTo(samplingMap);
 }
@@ -1576,4 +1573,15 @@ void RRDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BAS
 
 		Mat(im2(Rect(patch_size.width, patch_size.height, src.cols, src.rows))).copyTo(dest);
 	}
+}
+
+RRDXTDenoise::RRDXTDenoise()
+{
+	rng(cv::getCPUTickCount()); 
+}
+
+RRDXTDenoise::RRDXTDenoise(cv::Size size, int color, cv::Size patch_size_) :RedundantDXTDenoise(size, color, patch_size_)
+{
+	rng(cv::getCPUTickCount());
+	generateSamplingMaps(size, patch_size_, 20, 0, SAMPLING::FULL);
 }
