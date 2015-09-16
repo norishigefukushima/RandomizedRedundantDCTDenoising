@@ -8,9 +8,13 @@ using namespace lab;
 void guiDenoise(Mat& src, string wname = "denoise")
 {
 	namedWindow(wname);
+
 	int sw = 0; createTrackbar("sw", wname, &sw, 4);
+	int blksize = 3; createTrackbar("bsize2^n", wname, &blksize, 6);
 	int snoise = 20; createTrackbar("noise", wname, &snoise, 100);
+	int thresh = 200; createTrackbar("thresh", wname, &thresh, 2000);
 	int r = 2; createTrackbar("r", wname, &r, 20);
+	int radius = 2; createTrackbar("rad", wname, &radius, 20);
 	int sigma_s = 50; createTrackbar("ss", wname, &sigma_s, 2500);
 	int sigma_c = 180; createTrackbar("sc", wname, &sigma_c, 2500);
 
@@ -23,26 +27,24 @@ void guiDenoise(Mat& src, string wname = "denoise")
 	rrdct.generateSamplingMaps(src.size(), Size(16, 16), 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
 	while (key!='q')
 	{
+		int bsize = pow(2, blksize);
+		Size block = Size(bsize, bsize);
 		if (key=='n') addNoise(src, noise, snoise);
 		{
 			CalcTime t;
-			if (sw == 0) dctDenoise(noise, dest, sigma_c / 10.0, Size(8, 8));
+			if (sw == 0) dctDenoise(noise, dest, thresh / 10.f, block);
 			else if (sw == 1)
 			{
-				rrdct.generateSamplingMaps(src.size(), Size(8, 8), 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
-				rrdct.interlace(noise, dest, sigma_c / 10.0, Size(8, 8));
+				rrdct.generateSamplingMaps(src.size(), block, 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
+				rrdct(noise, dest, thresh / 10.f, block);
 			}
 			else if (sw == 2)
 			{
-				rrdct.generateSamplingMaps(src.size(), Size(8, 8), 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
-				rrdct.interlace2(noise, dest, sigma_c / 10.0, Size(8, 8));
-
-				//rrdct.generateSamplingMaps(src.size(), Size(16, 16), 1, r, RandomizedRedundantDXTDenoise::SAMPLING::LATTICE);
-				//rrdct.interlace(noise, dest, sigma_c / 10.0, Size(16, 16));
+				bilateralFilter(noise, dest, 2 * radius + 1, sigma_c / 10.0, sigma_s / 10.0, BORDER_REPLICATE);
 			}
 			else if (sw == 3)
 			{
-				nonLocalMeansFilter(noise, dest, 3, 2 * r + 1, 1.4*sigma_c / 10.0);
+				fastNlMeansDenoisingColored(noise, dest, sigma_c / 10.0, sigma_s / 10.0, 3, 2 * radius + 1);
 			}
 		}
 		cout << YPSNR(src, dest) << endl;

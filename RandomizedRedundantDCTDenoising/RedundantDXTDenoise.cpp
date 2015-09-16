@@ -254,7 +254,6 @@ public:
 		const int w2 = 2 * width;
 		const int w3 = 3 * width;
 
-		Mat buff(Size(4, 4), CV_32F); Mat mask;
 		for (int j = range.start; j != range.end; j++)
 		{
 			Mat patch(Size(4, 4), CV_32F);
@@ -292,7 +291,6 @@ public:
 class RDCTThresholdingInvorker2x2 : public cv::ParallelLoopBody
 {
 private:
-
 	float* src;
 	float* dest;
 	float thresh;
@@ -355,8 +353,6 @@ public:
 class RDCTThresholdingInvorker : public cv::ParallelLoopBody
 {
 private:
-
-
 	float* src;
 	float* dest;
 	float thresh;
@@ -418,6 +414,7 @@ public:
 	}
 };
 
+/*
 class ShearableDenoiseDCTShrinkageInvorker4x4 : public cv::ParallelLoopBody
 {
 private:
@@ -502,7 +499,7 @@ public:
 					*(ptch+12) = *(s0+w3  );
 					*(ptch+13) = *(s0+w3+1);
 					*(ptch+14) = *(s0+w2+2);
-					*(ptch+15) = *(s0+w2+3);*/
+					*(ptch+15) = *(s0+w2+3);
 
 				}
 				else if (direct == -3)
@@ -618,17 +615,6 @@ public:
 						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
 					}
 				}
-				/*else if(direct==3)
-				{
-				for (int jp = 0; jp < 4; jp ++)
-				{
-				float* s =patch.ptr<float>(jp);
-				d0[(jp)*width+0] += s[0];
-				d0[(jp)*width+1] += s[1];
-				d0[(jp)*width+2] += s[2];
-				d0[(jp)*width+3] += s[3];
-				}
-				}*/
 				else if (direct == -1)
 				{
 					for (int jp = 0; jp < 4; jp++)
@@ -659,6 +645,7 @@ public:
 		}
 	}
 };
+
 
 class DenoiseWeightedDCTShrinkageInvorker8x8 : public cv::ParallelLoopBody
 {
@@ -815,7 +802,7 @@ public:
 		}
 	}
 };
-
+*/
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //TBB DHT tbbdht///////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -890,7 +877,6 @@ public:
 			}
 		}
 	}
-
 };
 
 class DenoiseDHTShrinkageInvorker8x8 : public cv::ParallelLoopBody
