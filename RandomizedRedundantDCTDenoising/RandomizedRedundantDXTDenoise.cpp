@@ -144,6 +144,144 @@ static void computeRandomizedCoutMap(Mat& dest, Mat& mask, Size patch_size)
 	}
 }
 
+class RandomizedCoutMapInvorker : public cv::ParallelLoopBody
+{
+private:
+	float* src;
+	float* dest;
+	int width;
+	int height;
+	Size patch_size;
+	cv::Mat& randomMask;//for randomized sampling
+
+public:
+	int EvenOddFull;
+	RandomizedCoutMapInvorker(float *sim, float* dim, Mat& rmask, int w, int h, Size psize) : src(sim), dest(dim), width(w), height(h), patch_size(psize), randomMask(rmask)
+	{
+		EvenOddFull = 0;
+	}
+
+	virtual void operator() (const Range& range) const
+	{
+		int pwidth = patch_size.width;
+		int pheight = patch_size.height;
+		const int size1 = width * height;
+		const int hstep = height - pheight;
+		const int wstep = width - pwidth;
+
+		Mat d = Mat(Size(width, height), CV_32F, dest);
+
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
+		{
+			float* s0 = &dest[j*width];
+			uchar* msk = randomMask.ptr<uchar>(j);
+			if (patch_size.width == 16)
+			{
+				for (int i = 0; i < width - patch_size.width; i++)
+				{
+					if (msk[i])
+					{
+						const __m128 mones = _mm_set1_ps(1.0);
+						for (int jp = 0; jp < 16; jp++)
+						{
+							float* d = &s0[(jp)*width];
+							__m128 sp1 = _mm_loadu_ps(d);
+							_mm_storeu_ps(d, _mm_add_ps(sp1, mones));
+
+							d += 4;
+
+							sp1 = _mm_loadu_ps(d);
+							_mm_storeu_ps(d, _mm_add_ps(sp1, mones));
+
+							d += 4;
+
+							sp1 = _mm_loadu_ps(d);
+							_mm_storeu_ps(d, _mm_add_ps(sp1, mones));
+
+							d += 4;
+
+							sp1 = _mm_loadu_ps(d);
+							_mm_storeu_ps(d, _mm_add_ps(sp1, mones));
+						}
+					}
+					s0++;
+				}
+			}
+			else if (patch_size.width == 8)
+			{
+				for (int i = 0; i < width - patch_size.width; i++)
+				{
+					if (msk[i])
+					{
+						const __m128 mones = _mm_set1_ps(1.0);
+						for (int jp = 0; jp < 8; jp++)
+						{
+							float* d = &s0[(jp)*width];
+							__m128 sp1 = _mm_loadu_ps(d);
+							_mm_storeu_ps(d, _mm_add_ps(sp1, mones));
+							d += 4;
+							sp1 = _mm_loadu_ps(d);
+							_mm_storeu_ps(d, _mm_add_ps(sp1, mones));
+						}
+					}
+					s0++;
+				}
+			}
+			else if (patch_size.width == 4)
+			{
+				for (int i = 0; i < width - patch_size.width; i++)
+				{
+					if (msk[i])
+					{
+						const __m128 mones = _mm_set1_ps(1.0);
+						for (int jp = 0; jp < 4; jp++)
+						{
+							float* d = &s0[(jp)*width];
+							__m128 sp1 = _mm_loadu_ps(d);
+							_mm_storeu_ps(d, _mm_add_ps(sp1, mones));
+						}
+					}
+					s0++;
+				}
+			}
+			else
+			{
+				for (int i = 0; i < width - patch_size.width; i++)
+				{
+					if (msk[i])
+					{
+						for (int jp = 0; jp < patch_size.height; jp++)
+						{
+							float* d = &s0[(jp)*width];
+							for (int ip = 0; ip < patch_size.width; ip++)
+							{
+								d[ip] += 1.f;
+							}
+						}
+					}
+					s0++;
+				}
+			}
+		}
+	}
+};
+
 class RRDCTThresholdingInvorker : public cv::ParallelLoopBody
 {
 private:
@@ -1548,7 +1686,12 @@ void RRDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BAS
 		{
 			body(ipixels, opixels, Th);
 		}
-		computeRandomizedCoutMap(cmap, samplingMap, patch_size);
+		//computeRandomizedCoutMap(cmap, samplingMap, patch_size);
+		int numThreads = getNumThreads();
+		RandomizedCoutMapInvorker invork(cmap.ptr<float>(0), cmap.ptr<float>(0), samplingMap, cmap.cols, cmap.rows, patch_size);
+		parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+		invork.EvenOddFull = 1;
+		parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 	}
 	if (channel == 3) div(opixels, opixels + size1, opixels + 2 * size1, cmap.ptr<float>(0), size1);
 	else divide(sum, cmap, sum);

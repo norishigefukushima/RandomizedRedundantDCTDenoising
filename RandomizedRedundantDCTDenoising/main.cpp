@@ -3,9 +3,14 @@
 using namespace std;
 using namespace cv;
 
-#define OPENCV_DCTDENOISE 
+//#define OPENCV_DCTDENOISE 
 #ifdef OPENCV_DCTDENOISE
 #include <opencv2/xphoto.hpp>
+#ifdef _DEBUG
+#pragma comment(lib, "opencv_xphoto"CV_VERSION_NUMBER"d.lib")
+#else
+#pragma comment(lib, "opencv_xphoto"CV_VERSION_NUMBER".lib")
+#endif
 #endif
 
 void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
@@ -61,7 +66,7 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 #ifdef OPENCV_DCTDENOISE
 				cv::xphoto::dctDenoising(noise, dest, thresh, bsize);
 #else
-				cout << "not compiled"
+				cout << "cv::xphoto::dctDenoising is not compiled. Please define OPENCV_DCTDENOISE "<<endl;
 #endif
 			}
 
