@@ -20,6 +20,13 @@ The code is tested on OpenCV 3.0 or later and Visual Studio 2013:
 
 Optionally, we can use DHT (discrete Walsh–Hadamard transform) for fast computation instead of using DCT.
 
+Download binary for Windows
+---------------------------
+https://github.com/norishigefukushima/RandomizedRedundantDCTDenoising/releases
+
+
+Reference
+---------------------------
 * [1] S. Fujita, N. Fukushima, M. Kimura, and Y. Ishibashi, "Randomized redundant DCT: Efficient denoising by using random subsampling of DCT patches," Proc. Siggraph Asia, Technical Brief, Nov. 2015.
 * [2] G. Yu and G. Sapiro, "DCT image denoising: a simple and effective image denoising algorithm," Image Processing On Line, 1 (2011). http://dx.doi.org/10.5201/ipol.2011.ys-dct
 http://www.ipol.im/pub/art/2011/ys-dct/
