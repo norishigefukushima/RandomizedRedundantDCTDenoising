@@ -126,10 +126,12 @@
       <WarningLevel>Level3</WarningLevel>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -139,12 +141,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="color.cpp" />
     <ClCompile Include="dct_simd.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="RandomizedRedundantDXTDenoise.cpp" />
     <ClCompile Include="RedundantDXTDenoise.cpp" />
     <ClCompile Include="transpose_simd.cpp" />
+    <ClCompile Include="utility.cpp" />
     <ClCompile Include="walsh_hadamard_simd.cpp" />
   </ItemGroup>
   <ItemGroup>

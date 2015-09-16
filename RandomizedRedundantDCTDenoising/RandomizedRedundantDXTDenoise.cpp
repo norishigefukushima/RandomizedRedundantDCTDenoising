@@ -609,7 +609,7 @@ public:
 	}
 };
 
-class DenoiseDHTShrinkageInvorker16x16 : public cv::ParallelLoopBody
+class RRDHTThresholdingInvorker16x16 : public cv::ParallelLoopBody
 {
 private:
 	float* src;
@@ -617,21 +617,37 @@ private:
 	float thresh;
 	int width;
 	int height;
+	cv::Mat& randomMask;//for randomized sampling
 
 public:
-
-	DenoiseDHTShrinkageInvorker16x16(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
+	int EvenOddFull;
+	RRDHTThresholdingInvorker16x16(float *sim, float* dim, Mat& rmask, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th), randomMask(rmask)
 	{
-		;
+		EvenOddFull = 0;
 	}
 	virtual void operator() (const Range& range) const
 	{
 		const int size1 = width * height;
-		const int hstep = height - 16 + 1;
-		const int wstep = width - 16 + 1;
+		const int hstep = height - 16;
+		const int wstep = width - 16;
 
-		int j;
-		for (j = range.start; j != range.end; j++)
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
 		{
 			Mat patch(Size(16, 16), CV_32F);
 			float* ptch = patch.ptr<float>(0);
@@ -639,41 +655,46 @@ public:
 			float* s0 = &src[width*j];
 			float* d0 = &dest[width*j];
 			const int sz = sizeof(float) * 16;
+
+			uchar* msk = randomMask.ptr<uchar>(j);//
 			for (int i = 0; i < wstep; i++)
 			{
-				for (int n = 0; n < 16; n++)
-					memcpy(ptch + 16 * n, s0 + n*width, sz);
-
-				Hadamard2D16x16andThreshandIDHT(ptch, thresh);
-
-				//add data
-				for (int jp = 0; jp < 16; jp++)
+				if (msk[i])//
 				{
-					float* s = patch.ptr<float>(jp);
-					float* d = &d0[(jp)*width];
-					__m128 mp1 = _mm_load_ps(s);
-					__m128 sp1 = _mm_loadu_ps(d);
-					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					s += 4;
-					d += 4;
+					for (int n = 0; n < 16; n++)
+						memcpy(ptch + 16 * n, s0 + n*width, sz);
 
-					mp1 = _mm_load_ps(s);
-					sp1 = _mm_loadu_ps(d);
-					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					s += 4;
-					d += 4;
+					Hadamard2D16x16andThreshandIDHT(ptch, thresh);
 
-					mp1 = _mm_load_ps(s);
-					sp1 = _mm_loadu_ps(d);
-					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					s += 4;
-					d += 4;
+					//add data
+					for (int jp = 0; jp < 16; jp++)
+					{
+						float* s = patch.ptr<float>(jp);
+						float* d = &d0[(jp)*width];
+						__m128 mp1 = _mm_load_ps(s);
+						__m128 sp1 = _mm_loadu_ps(d);
+						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+						s += 4;
+						d += 4;
 
-					mp1 = _mm_load_ps(s);
-					sp1 = _mm_loadu_ps(d);
-					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					s += 4;
-					d += 4;
+						mp1 = _mm_load_ps(s);
+						sp1 = _mm_loadu_ps(d);
+						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+						s += 4;
+						d += 4;
+
+						mp1 = _mm_load_ps(s);
+						sp1 = _mm_loadu_ps(d);
+						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+						s += 4;
+						d += 4;
+
+						mp1 = _mm_load_ps(s);
+						sp1 = _mm_loadu_ps(d);
+						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+						s += 4;
+						d += 4;
+					}
 				}
 				s0++;
 				d0++;
@@ -681,7 +702,183 @@ public:
 		}
 	}
 };
-void RandomizedRedundantDXTDenoise::body(float *src, float* dest, float Th)
+
+class RRDHTThresholdingInvorker8x8 : public cv::ParallelLoopBody
+{
+private:
+	float* src;
+	float* dest;
+	float thresh;
+	int width;
+	int height;
+	cv::Mat& randomMask;//for randomized sampling
+
+public:
+	int EvenOddFull;
+	RRDHTThresholdingInvorker8x8(float *sim, float* dim, Mat& rmask, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th), randomMask(rmask)
+	{
+		EvenOddFull = 0;
+	}
+	virtual void operator() (const Range& range) const
+	{
+		const int size1 = width * height;
+		const int hstep = height - 8;
+		const int wstep = width - 8;
+		const int w1 = 1 * width;
+		const int w2 = 2 * width;
+		const int w3 = 3 * width;
+		const int w4 = 4 * width;
+		const int w5 = 5 * width;
+		const int w6 = 6 * width;
+		const int w7 = 7 * width;
+
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
+		{
+			Mat patch(Size(8, 8), CV_32F);
+			float* ptch = patch.ptr<float>(0);
+
+			float* s0 = &src[width*j];
+			float* d0 = &dest[width*j];
+			const int sz = sizeof(float) * 8;
+
+			uchar* msk = randomMask.ptr<uchar>(j);//
+			for (int i = 0; i < wstep; i++)
+			{
+				if (msk[i])//
+				{
+					memcpy(ptch, s0, sz);
+					memcpy(ptch + 8, s0 + w1, sz);
+					memcpy(ptch + 16, s0 + w2, sz);
+					memcpy(ptch + 24, s0 + w3, sz);
+					memcpy(ptch + 32, s0 + w4, sz);
+					memcpy(ptch + 40, s0 + w5, sz);
+					memcpy(ptch + 48, s0 + w6, sz);
+					memcpy(ptch + 56, s0 + w7, sz);
+
+					Hadamard2D8x8andThreshandIDHT(ptch, thresh);
+
+
+					//add data
+					for (int jp = 0; jp < 8; jp++)
+					{
+						float* s = patch.ptr<float>(jp);
+						float* d = &d0[(jp)*width];
+						__m128 mp1 = _mm_load_ps(s);
+						__m128 sp1 = _mm_loadu_ps(d);
+
+						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+
+						s += 4;
+						d += 4;
+
+						mp1 = _mm_load_ps(s);
+						sp1 = _mm_loadu_ps(d);
+						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+					}
+				}
+				s0++;
+				d0++;
+			}
+		}
+	}
+};
+
+class RRDHTThresholdingInvorker4x4 : public cv::ParallelLoopBody
+{
+private:
+	float* src;
+	float* dest;
+	float thresh;
+	int width;
+	int height;
+	cv::Mat& randomMask;//for randomized sampling
+
+public:
+	int EvenOddFull;
+	RRDHTThresholdingInvorker4x4(float *sim, float* dim, Mat& rmask, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th), randomMask(rmask)
+	{
+		EvenOddFull = 0;
+	}
+	virtual void operator() (const Range& range) const
+	{
+		const int size1 = width * height;
+		const int hstep = height - 4;
+		const int wstep = width - 4;
+		const int w1 = 1 * width;
+		const int w2 = 2 * width;
+		const int w3 = 3 * width;
+
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
+		{
+			Mat patch(Size(4, 4), CV_32F);
+			float* ptch = patch.ptr<float>(0);
+
+			float* s0 = &src[width*j];
+			float* d0 = &dest[width*j];
+			const int sz = sizeof(float) * 4;
+
+			uchar* msk = randomMask.ptr<uchar>(j);
+			for (int i = 0; i < wstep; i++)
+			{
+				if (msk[i])
+				{
+					memcpy(ptch, s0, sz);
+					memcpy(ptch + 4, s0 + w1, sz);
+					memcpy(ptch + 8, s0 + w2, sz);
+					memcpy(ptch + 12, s0 + w3, sz);
+
+					Hadamard2D4x4andThreshandIDHT(ptch, thresh);
+
+					//add data
+					for (int jp = 0; jp < 4; jp++)
+					{
+						float* s = patch.ptr<float>(jp);
+						float* d = &d0[(jp)*width];
+						__m128 mp1 = _mm_load_ps(s);
+						__m128 sp1 = _mm_loadu_ps(d);
+						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+					}
+				}
+				s0++;
+				d0++;
+			}
+		}
+	}
+};
+
+void RRDXTDenoise::body(float *src, float* dest, float Th)
 {
 	int numThreads = getNumThreads();
 
@@ -732,21 +929,21 @@ void RandomizedRedundantDXTDenoise::body(float *src, float* dest, float Th)
 		{
 			if (patch_size.width == 4)
 			{
-				RRDCTThresholdingInvorker4x4 invork(src, dest, samplingMap, Th, size.width, size.height);
+				RRDHTThresholdingInvorker4x4 invork(src, dest, samplingMap, Th, size.width, size.height);
 				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 				invork.EvenOddFull = 1;
 				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else if (patch_size.width == 8)
 			{
-				RRDCTThresholdingInvorker8x8 invork(src, dest, samplingMap, Th, size.width, size.height);
+				RRDHTThresholdingInvorker8x8 invork(src, dest, samplingMap, Th, size.width, size.height);
 				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 				invork.EvenOddFull = 1;
 				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else if (patch_size.width == 16)
 			{
-				RRDCTThresholdingInvorker16x16 invork(src, dest, samplingMap, Th, size.width, size.height);
+				RRDHTThresholdingInvorker16x16 invork(src, dest, samplingMap, Th, size.width, size.height);
 				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 				invork.EvenOddFull = 1;
 				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
@@ -1083,7 +1280,7 @@ void setLattice(Mat& dest, int d, RNG& rng)
 	}
 }
 
-void RandomizedRedundantDXTDenoise::setSamplingMap(Mat& samplingMap, SAMPLING samplingType, int d)
+void RRDXTDenoise::setSamplingMap(Mat& samplingMap, SAMPLING samplingType, int d)
 {
 	RNG rng;
 	Size s = Size(size.width + patch_size.width, size.height + patch_size.height);
@@ -1106,7 +1303,7 @@ void RandomizedRedundantDXTDenoise::setSamplingMap(Mat& samplingMap, SAMPLING sa
 	}
 }
 
-void RandomizedRedundantDXTDenoise::generateSamplingMaps(Size size, Size psize, int number_of_LUT, int d, SAMPLING sampleType)
+void RRDXTDenoise::generateSamplingMaps(Size size, Size psize, int number_of_LUT, int d, SAMPLING sampleType)
 {
 	RNG rng;
 	init(size, 3, psize);
@@ -1121,14 +1318,14 @@ void RandomizedRedundantDXTDenoise::generateSamplingMaps(Size size, Size psize, 
 	}
 }
 
-void RandomizedRedundantDXTDenoise::getSamplingFromLUT(Mat& samplingMap)
+void RRDXTDenoise::getSamplingFromLUT(Mat& samplingMap)
 {
 	RNG rng;
 	if ((int)samplingMapLUTs.size() == 0) generateSamplingMaps(size, patch_size, 20, 0, SAMPLING::FULL);
 	samplingMapLUTs[rng.uniform(0, (int)samplingMapLUTs.size())].copyTo(samplingMap);
 }
 
-void RandomizedRedundantDXTDenoise::div(float* inplace0, float* inplace1, float* inplace2, float* count, const int size1)
+void RRDXTDenoise::div(float* inplace0, float* inplace1, float* inplace2, float* count, const int size1)
 {
 	float* s0 = inplace0;
 	float* s1 = inplace1;
@@ -1152,7 +1349,7 @@ void RandomizedRedundantDXTDenoise::div(float* inplace0, float* inplace1, float*
 	}
 }
 
-void RandomizedRedundantDXTDenoise::div(float* inplace0, float* inplace1, float* inplace2, float* inplace3, float* count, const int size1)
+void RRDXTDenoise::div(float* inplace0, float* inplace1, float* inplace2, float* inplace3, float* count, const int size1)
 {
 	float* s0 = inplace0;
 	float* s1 = inplace1;
@@ -1221,7 +1418,7 @@ void redundantColorTransformInv(Mat& src, Mat& dest)
 	}
 }
 
-void RandomizedRedundantDXTDenoise::colorredundunt(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
+void RRDXTDenoise::colorredundunt(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
 {
 	Mat src;
 	if (src_.depth() != CV_32F)src_.convertTo(src, CV_MAKETYPE(CV_32F, src_.channels()));
@@ -1298,7 +1495,7 @@ void RandomizedRedundantDXTDenoise::colorredundunt(Mat& src_, Mat& dest, float s
 	}
 }
 
-void RandomizedRedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
+void RRDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BASIS transform_basis)
 {
 	Mat src;
 	if (src_.depth() != CV_32F)src_.convertTo(src, CV_MAKETYPE(CV_32F, src_.channels()));
@@ -1380,4 +1577,3 @@ void RandomizedRedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma
 		Mat(im2(Rect(patch_size.width, patch_size.height, src.cols, src.rows))).copyTo(dest);
 	}
 }
-

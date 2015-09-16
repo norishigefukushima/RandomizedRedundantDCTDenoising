@@ -21,9 +21,6 @@
     <ClCompile Include="RandomizedRedundantDXTDenoise.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="color.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
@@ -38,6 +35,9 @@
     </ClCompile>
     <ClCompile Include="walsh_hadamard_simd.cpp">
       <Filter>ソース ファイル\simd</Filter>
+    </ClCompile>
+    <ClCompile Include="utility.cpp">
+      <Filter>ソース ファイル</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

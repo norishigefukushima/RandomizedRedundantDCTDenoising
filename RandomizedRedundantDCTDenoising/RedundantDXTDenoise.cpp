@@ -52,6 +52,81 @@ void Hadamard2D16x16(float* src);
 //TBB for DCT TBB DCT tbbdct//////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////
 
+class RDCTThresholdingInvorker : public cv::ParallelLoopBody
+{
+private:
+	float* src;
+	float* dest;
+	float thresh;
+	int width;
+	int height;
+	Size patch_size;
+
+public:
+	int EvenOddFull;
+	RDCTThresholdingInvorker(float *sim, float* dim, float Th, int w, int h, Size psize) : src(sim), dest(dim), width(w), height(h), patch_size(psize), thresh(Th)
+	{
+		EvenOddFull = 0;
+	}
+
+	virtual void operator() (const Range& range) const
+	{
+		int pwidth = patch_size.width;
+		int pheight = patch_size.height;
+		const int size1 = width * height;
+		const int hstep = height - pheight;
+		const int wstep = width - pwidth;
+
+		Mat d = Mat(Size(width, height), CV_32F, dest);
+
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
+		{
+			Mat patch(patch_size, CV_32F);
+			Mat mask(patch_size, CV_8U);
+			float* ptch = patch.ptr<float>(0);
+
+			float* s0 = &src[width*j];
+			const int sz = sizeof(float)*patch_size.width;
+
+			for (int i = 0; i < wstep; i++)
+			{
+				for (int k = 0; k < patch_size.height; k++)
+				{
+					memcpy(ptch + k*patch_size.width, s0 + k*width, sz);
+				}
+				dct(patch, patch);
+
+				float f0 = *(float*)patch.data;
+				compare(abs(patch), thresh, mask, CMP_LT);
+				patch.setTo(0.f, mask);
+				*(float*)patch.data = f0;
+				dct(patch, patch, DCT_INVERSE);
+
+				Mat r = d(Rect(i, j, patch_size.width, patch_size.height));
+				r += patch;
+
+				s0++;
+			}
+		}
+	}
+};
+
 class RDCTThresholdingInvorker16x16 : public cv::ParallelLoopBody
 {
 private:
@@ -62,11 +137,11 @@ private:
 	int height;
 
 public:
-
+	int EvenOddFull;
 	RDCTThresholdingInvorker16x16(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
+		EvenOddFull = 0;
 	}
-
 	virtual void operator() (const Range& range) const
 	{
 		const int size1 = width * height;
@@ -87,16 +162,31 @@ public:
 		const int w13 = 13 * width;
 		const int w14 = 14 * width;
 		const int w15 = 15 * width;
-		
-		for (int j = range.start; j != range.end; j++)
+
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
 		{
 			Mat patch(Size(16, 16), CV_32F);
-			Mat mask(Size(16, 16), CV_8U);
-
 			float* ptch = patch.ptr<float>(0);
 
 			float* s0 = &src[width*j];
 			float* d0 = &dest[width*j];
+
 			const int sz = sizeof(float) * 16;
 			for (int i = 0; i < wstep; i++)
 			{
@@ -118,31 +208,29 @@ public:
 				memcpy(ptch + 240, s0 + w15, sz);
 
 				fDCT16x16_threshold_keep00_iDCT16x16(patch.ptr<float>(0), patch.ptr<float>(0), thresh);
-				
+
 				//add data
+				const __m128 mones = _mm_set1_ps(1.0);
 				for (int jp = 0; jp < 16; jp++)
 				{
 					float* s = patch.ptr<float>(jp);
 					float* d = &d0[(jp)*width];
+
 					__m128 mp1 = _mm_load_ps(s);
 					__m128 sp1 = _mm_loadu_ps(d);
-
 					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-
 					s += 4;
 					d += 4;
 
 					mp1 = _mm_load_ps(s);
 					sp1 = _mm_loadu_ps(d);
 					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-
 					s += 4;
 					d += 4;
 
 					mp1 = _mm_load_ps(s);
 					sp1 = _mm_loadu_ps(d);
 					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-
 					s += 4;
 					d += 4;
 
@@ -167,15 +255,16 @@ private:
 	int height;
 
 public:
-
+	int EvenOddFull;
 	RDCTThresholdingInvorker8x8(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
+		EvenOddFull = 0;
 	}
 
 	virtual void operator() (const Range& range) const
 	{
 		const int size1 = width * height;
-		const int hstep = height - 8 ;
+		const int hstep = height - 8;
 		const int wstep = width - 8;
 		const int w1 = 1 * width;
 		const int w2 = 2 * width;
@@ -183,9 +272,25 @@ public:
 		const int w4 = 4 * width;
 		const int w5 = 5 * width;
 		const int w6 = 6 * width;
-		const int w7 = 7 * width;	
-		
-		for (int j = range.start; j != range.end; j++)
+		const int w7 = 7 * width;
+
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
 		{
 			Mat patch(Size(8, 8), CV_32F);
 			float* ptch = patch.ptr<float>(0);
@@ -196,7 +301,7 @@ public:
 
 			for (int i = 0; i < wstep; i++)
 			{
-				memcpy(ptch, s0, sz);
+				memcpy(ptch + 0, s0, sz);
 				memcpy(ptch + 8, s0 + w1, sz);
 				memcpy(ptch + 16, s0 + w2, sz);
 				memcpy(ptch + 24, s0 + w3, sz);
@@ -212,14 +317,13 @@ public:
 				{
 					float* s = patch.ptr<float>(jp);
 					float* d = &d0[(jp)*width];
+
 					__m128 mp1 = _mm_load_ps(s);
 					__m128 sp1 = _mm_loadu_ps(d);
-
 					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
 
 					s += 4;
 					d += 4;
-
 					mp1 = _mm_load_ps(s);
 					sp1 = _mm_loadu_ps(d);
 					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
@@ -241,8 +345,10 @@ private:
 	int height;
 
 public:
+	int EvenOddFull;
 	RDCTThresholdingInvorker4x4(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
+		EvenOddFull = 0;
 	}
 
 	virtual void operator() (const Range& range) const
@@ -254,7 +360,23 @@ public:
 		const int w2 = 2 * width;
 		const int w3 = 3 * width;
 
-		for (int j = range.start; j != range.end; j++)
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
 		{
 			Mat patch(Size(4, 4), CV_32F);
 			float* ptch = patch.ptr<float>(0);
@@ -262,6 +384,7 @@ public:
 			float* s0 = &src[width*j];
 			float* d0 = &dest[width*j];
 			const int sz = sizeof(float) * 4;
+
 			for (int i = 0; i < wstep; i++)
 			{
 				memcpy(ptch, s0, sz);
@@ -298,8 +421,10 @@ private:
 	int height;
 
 public:
+	int EvenOddFull;
 	RDCTThresholdingInvorker2x2(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
+		EvenOddFull = 0;
 	}
 	virtual void operator() (const Range& range) const
 	{
@@ -308,13 +433,31 @@ public:
 		const int hstep = height - 2;
 		const int wstep = width - 2;
 
-		for (int j = range.start; j != range.end; j++)
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
 		{
 			Mat patch(Size(4, 2), CV_32F);
 			float* ptch = patch.ptr<float>(0);
+
 			float* s0 = &src[width*j];
 			float* d0 = &dest[width*j];
 			const int sz = sizeof(float) * 4;
+
 			for (int i = 0; i < wstep; i += 4)
 			{
 				memcpy(ptch, s0, sz);
@@ -342,7 +485,6 @@ public:
 				mp1 = _mm_loadu_ps(ptch + 4);
 				sp1 = _mm_loadu_ps(d0 + width + 1);
 				_mm_storeu_ps(d0 + width + 1, _mm_add_ps(sp1, mp1));
-
 				s0 += 4;
 				d0 += 4;
 			}
@@ -350,463 +492,400 @@ public:
 	}
 };
 
-class RDCTThresholdingInvorker : public cv::ParallelLoopBody
-{
-private:
-	float* src;
-	float* dest;
-	float thresh;
-	int width;
-	int height;
-	Size patch_size;
-
-public:
-
-	RDCTThresholdingInvorker(float *sim, float* dim, float Th, int w, int h, Size psize) : src(sim), dest(dim), width(w), height(h), patch_size(psize), thresh(Th)
-	{
-	}
-
-	virtual void operator() (const Range& range) const
-	{
-		int pwidth = patch_size.width;
-		int pheight = patch_size.height;
-		const int size1 = width * height;
-		const int hstep = height - pheight;
-		const int wstep = width - pwidth;
-
-		Mat d = Mat(Size(width, height), CV_32F, dest);
-		for (int j = range.start; j != range.end; j++)
-		{
-			Mat patch(patch_size, CV_32F);
-			Mat mask;//(patch_size, CV_8U);
-
-			float* ptch = patch.ptr<float>(0);
-
-			float* s0 = &src[width*j];
-
-			const int sz = sizeof(float)*patch_size.width;
-			for (int i = 0; i < wstep; i++)
-			{
-				for (int k = 0; k < patch_size.height; k++)
-				{
-					memcpy(ptch + k*patch_size.width, s0 + k*width, sz);
-				}
-
-				//Mat show1; patch.convertTo(show1,CV_8U);imshow("patchb",show1); 
-
-				dct(patch, patch);
-
-
-				float f0 = *(float*)patch.data;
-				compare(abs(patch), thresh, mask, CMP_LT);
-				patch.setTo(0.f, mask);
-				*(float*)patch.data = f0;
-
-
-				dct(patch, patch, DCT_INVERSE);
-
-				//Mat show; patch.convertTo(show,CV_8U);imshow("patch",show); waitKey(0);
-				Mat r = d(Rect(i, j, patch_size.width, patch_size.height));
-				r += patch;
-				s0++;
-			}
-		}
-	}
-};
 
 /*
 class ShearableDenoiseDCTShrinkageInvorker4x4 : public cv::ParallelLoopBody
 {
 private:
-	float* src;
-	float* dest;
-	float thresh;
-	int width;
-	int height;
-	int direct;
+float* src;
+float* dest;
+float thresh;
+int width;
+int height;
+int direct;
 
 
 public:
-	ShearableDenoiseDCTShrinkageInvorker4x4(float *sim, float* dim, float Th, int w, int h, int dr) : src(sim), dest(dim), width(w), height(h), thresh(Th), direct(dr)
-	{
-		;
-	}
+ShearableDenoiseDCTShrinkageInvorker4x4(float *sim, float* dim, float Th, int w, int h, int dr) : src(sim), dest(dim), width(w), height(h), thresh(Th), direct(dr)
+{
+;
+}
 
-	virtual void operator() (const Range& range) const
-	{
-		const int size1 = width * height;
-		const int hstep = height - 4 + 1;
-		const int wstep = width - 4 + 1;
-		const int w1 = 1 * width;
-		const int w2 = 2 * width;
-		const int w3 = 3 * width;
+virtual void operator() (const Range& range) const
+{
+const int size1 = width * height;
+const int hstep = height - 4 + 1;
+const int wstep = width - 4 + 1;
+const int w1 = 1 * width;
+const int w2 = 2 * width;
+const int w3 = 3 * width;
 
-		int j;
-		Mat buff(Size(4, 4), CV_32F); Mat mask;
-		for (j = range.start; j != range.end; j++)
-		{
-			Mat patch(Size(4, 4), CV_32F);
-			float* ptch = patch.ptr<float>(0);
+int j;
+Mat buff(Size(4, 4), CV_32F); Mat mask;
+for (j = range.start; j != range.end; j++)
+{
+Mat patch(Size(4, 4), CV_32F);
+float* ptch = patch.ptr<float>(0);
 
-			float* s0 = &src[width*j];
-			float* d0 = &dest[width*j];
-			const int sz = sizeof(float) * 4;
-			for (int i = 0; i < wstep; i++)
-			{
-				if (direct == 0)
-				{
-					memcpy(ptch, s0, sz);
-					memcpy(ptch + 4, s0 + w1, sz);
-					memcpy(ptch + 8, s0 + w2, sz);
-					memcpy(ptch + 12, s0 + w3, sz);
-				}
-				else if (direct == 1)
-				{
-					memcpy(ptch, s0, sz);
-					memcpy(ptch + 4, s0 + w1, sz);
-					memcpy(ptch + 8, s0 + w2 + 1, sz);
-					memcpy(ptch + 12, s0 + w3 + 1, sz);
-				}
-				else if (direct == 2)
-				{
-					memcpy(ptch, s0, sz);
-					memcpy(ptch + 4, s0 + w1 + 1, sz);
-					memcpy(ptch + 8, s0 + w2 + 2, sz);
-					memcpy(ptch + 12, s0 + w3 + 3, sz);
-				}
-				else if (direct == 3)
-				{
-					memcpy(ptch, s0, sz);
-					memcpy(ptch + 4, s0 + w1 + 2, sz);
-					memcpy(ptch + 8, s0 + w2 + 4, sz);
-					memcpy(ptch + 12, s0 + w3 + 6, sz);
+float* s0 = &src[width*j];
+float* d0 = &dest[width*j];
+const int sz = sizeof(float) * 4;
+for (int i = 0; i < wstep; i++)
+{
+if (direct == 0)
+{
+memcpy(ptch, s0, sz);
+memcpy(ptch + 4, s0 + w1, sz);
+memcpy(ptch + 8, s0 + w2, sz);
+memcpy(ptch + 12, s0 + w3, sz);
+}
+else if (direct == 1)
+{
+memcpy(ptch, s0, sz);
+memcpy(ptch + 4, s0 + w1, sz);
+memcpy(ptch + 8, s0 + w2 + 1, sz);
+memcpy(ptch + 12, s0 + w3 + 1, sz);
+}
+else if (direct == 2)
+{
+memcpy(ptch, s0, sz);
+memcpy(ptch + 4, s0 + w1 + 1, sz);
+memcpy(ptch + 8, s0 + w2 + 2, sz);
+memcpy(ptch + 12, s0 + w3 + 3, sz);
+}
+else if (direct == 3)
+{
+memcpy(ptch, s0, sz);
+memcpy(ptch + 4, s0 + w1 + 2, sz);
+memcpy(ptch + 8, s0 + w2 + 4, sz);
+memcpy(ptch + 12, s0 + w3 + 6, sz);
 
-					/**(ptch  ) = *(s0     );
-					*(ptch+1) = *(s0   +1);
-					*(ptch+2) = *(s0-w1+2);
-					*(ptch+3) = *(s0-w1+3);
+/**(ptch  ) = *(s0     );
+*(ptch+1) = *(s0   +1);
+*(ptch+2) = *(s0-w1+2);
+*(ptch+3) = *(s0-w1+3);
 
-					*(ptch+4) = *(s0+w1  );
-					*(ptch+5) = *(s0+w1+1);
-					*(ptch+6) = *(s0   +2);
-					*(ptch+7) = *(s0   +3);
+*(ptch+4) = *(s0+w1  );
+*(ptch+5) = *(s0+w1+1);
+*(ptch+6) = *(s0   +2);
+*(ptch+7) = *(s0   +3);
 
-					*(ptch+ 8) = *(s0+w2  );
-					*(ptch+ 9) = *(s0+w2+1);
-					*(ptch+10) = *(s0+w1+2);
-					*(ptch+11) = *(s0+w1+3);
+*(ptch+ 8) = *(s0+w2  );
+*(ptch+ 9) = *(s0+w2+1);
+*(ptch+10) = *(s0+w1+2);
+*(ptch+11) = *(s0+w1+3);
 
-					*(ptch+12) = *(s0+w3  );
-					*(ptch+13) = *(s0+w3+1);
-					*(ptch+14) = *(s0+w2+2);
-					*(ptch+15) = *(s0+w2+3);
+*(ptch+12) = *(s0+w3  );
+*(ptch+13) = *(s0+w3+1);
+*(ptch+14) = *(s0+w2+2);
+*(ptch+15) = *(s0+w2+3);
 
-				}
-				else if (direct == -3)
-				{
-					memcpy(ptch, s0, sz);
-					memcpy(ptch + 4, s0 + w1 - 2, sz);
-					memcpy(ptch + 8, s0 + w2 - 4, sz);
-					memcpy(ptch + 12, s0 + w3 - 6, sz);
-				}
-				else if (direct == -1)
-				{
-					memcpy(ptch, s0, sz);
-					memcpy(ptch + 4, s0 + w1, sz);
-					memcpy(ptch + 8, s0 + w2 - 1, sz);
-					memcpy(ptch + 12, s0 + w3 - 1, sz);
-				}
-				else if (direct == -2)
-				{
-					memcpy(ptch, s0, sz);
-					memcpy(ptch + 4, s0 + w1 - 1, sz);
-					memcpy(ptch + 8, s0 + w2 - 2, sz);
-					memcpy(ptch + 12, s0 + w3 - 3, sz);
-				}
+}
+else if (direct == -3)
+{
+memcpy(ptch, s0, sz);
+memcpy(ptch + 4, s0 + w1 - 2, sz);
+memcpy(ptch + 8, s0 + w2 - 4, sz);
+memcpy(ptch + 12, s0 + w3 - 6, sz);
+}
+else if (direct == -1)
+{
+memcpy(ptch, s0, sz);
+memcpy(ptch + 4, s0 + w1, sz);
+memcpy(ptch + 8, s0 + w2 - 1, sz);
+memcpy(ptch + 12, s0 + w3 - 1, sz);
+}
+else if (direct == -2)
+{
+memcpy(ptch, s0, sz);
+memcpy(ptch + 4, s0 + w1 - 1, sz);
+memcpy(ptch + 8, s0 + w2 - 2, sz);
+memcpy(ptch + 12, s0 + w3 - 3, sz);
+}
 
 
-				fDCT4x4_threshold_keep00_iDCT4x4(patch.ptr<float>(0), thresh);
+fDCT4x4_threshold_keep00_iDCT4x4(patch.ptr<float>(0), thresh);
 
-				//#define _HARD_THRESHOLDING_
-				//#ifdef _HARD_THRESHOLDING_
-				//				dct4x4_llm_sse(patch.ptr<float>(0),patch.ptr<float>(0), buff.ptr<float>(0),0);
-				//				//dct(patch,patch);
-				//#ifdef _KEEP_00_COEF_
-				//				float f0=*(float*)patch.data;
-				//#endif
-				//				compare(abs(patch),thresh,mask,CMP_LT);
-				//				patch.setTo(0.f,mask);
-				//
-				//#ifdef _KEEP_00_COEF_
-				//				*(float*)patch.data = f0;
-				//#endif
-				//				dct4x4_llm_sse(patch.ptr<float>(0),patch.ptr<float>(0), buff.ptr<float>(0),DCT_INVERSE);
-				//				//dct(patch,patch,DCT_INVERSE);
-				//
-				//#else
-				//				dct(patch,patch);
-				//				Mat dst;
-				//				max(abs(patch)-25*thresh,0.f,dst);
-				//				compare(patch,0,mask,CMP_LT);
-				//				Mat(-1*dst).copyTo(dst,mask);
-				//				dst.at<float>(0,0)=patch.at<float>(0,0);
-				//				dct(dst,patch,DCT_INVERSE);
-				//#endif
+//#define _HARD_THRESHOLDING_
+//#ifdef _HARD_THRESHOLDING_
+//				dct4x4_llm_sse(patch.ptr<float>(0),patch.ptr<float>(0), buff.ptr<float>(0),0);
+//				//dct(patch,patch);
+//#ifdef _KEEP_00_COEF_
+//				float f0=*(float*)patch.data;
+//#endif
+//				compare(abs(patch),thresh,mask,CMP_LT);
+//				patch.setTo(0.f,mask);
+//
+//#ifdef _KEEP_00_COEF_
+//				*(float*)patch.data = f0;
+//#endif
+//				dct4x4_llm_sse(patch.ptr<float>(0),patch.ptr<float>(0), buff.ptr<float>(0),DCT_INVERSE);
+//				//dct(patch,patch,DCT_INVERSE);
+//
+//#else
+//				dct(patch,patch);
+//				Mat dst;
+//				max(abs(patch)-25*thresh,0.f,dst);
+//				compare(patch,0,mask,CMP_LT);
+//				Mat(-1*dst).copyTo(dst,mask);
+//				dst.at<float>(0,0)=patch.at<float>(0,0);
+//				dct(dst,patch,DCT_INVERSE);
+//#endif
 
-				//add data
+//add data
 
-				if (direct == 0)
-				{
-					for (int jp = 0; jp < 4; jp++)
-					{
-						float* s = patch.ptr<float>(jp);
-						float* d = &d0[(jp)*width];
-						__m128 mp1 = _mm_load_ps(s);
-						__m128 sp1 = _mm_loadu_ps(d);
+if (direct == 0)
+{
+for (int jp = 0; jp < 4; jp++)
+{
+float* s = patch.ptr<float>(jp);
+float* d = &d0[(jp)*width];
+__m128 mp1 = _mm_load_ps(s);
+__m128 sp1 = _mm_loadu_ps(d);
 
-						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					}
-				}
-				else if (direct == 1)
-				{
-					for (int jp = 0; jp < 4; jp++)
-					{
-						float* s = patch.ptr<float>(jp);
-						float* d = &d0[(jp)*width + jp / 2];
-						__m128 mp1 = _mm_load_ps(s);
-						__m128 sp1 = _mm_loadu_ps(d);
+_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+}
+}
+else if (direct == 1)
+{
+for (int jp = 0; jp < 4; jp++)
+{
+float* s = patch.ptr<float>(jp);
+float* d = &d0[(jp)*width + jp / 2];
+__m128 mp1 = _mm_load_ps(s);
+__m128 sp1 = _mm_loadu_ps(d);
 
-						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					}
-				}
-				else if (direct == 2)
-				{
-					for (int jp = 0; jp < 4; jp++)
-					{
-						float* s = patch.ptr<float>(jp);
-						float* d = &d0[(jp)*width + jp];
-						__m128 mp1 = _mm_load_ps(s);
-						__m128 sp1 = _mm_loadu_ps(d);
+_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+}
+}
+else if (direct == 2)
+{
+for (int jp = 0; jp < 4; jp++)
+{
+float* s = patch.ptr<float>(jp);
+float* d = &d0[(jp)*width + jp];
+__m128 mp1 = _mm_load_ps(s);
+__m128 sp1 = _mm_loadu_ps(d);
 
-						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					}
-				}
-				else if (direct == 3)
-				{
-					for (int jp = 0; jp < 4; jp++)
-					{
-						float* s = patch.ptr<float>(jp);
-						float* d = &d0[(jp)*width + 2 * jp];
-						__m128 mp1 = _mm_load_ps(s);
-						__m128 sp1 = _mm_loadu_ps(d);
+_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+}
+}
+else if (direct == 3)
+{
+for (int jp = 0; jp < 4; jp++)
+{
+float* s = patch.ptr<float>(jp);
+float* d = &d0[(jp)*width + 2 * jp];
+__m128 mp1 = _mm_load_ps(s);
+__m128 sp1 = _mm_loadu_ps(d);
 
-						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					}
-				}
-				else if (direct == -3)
-				{
-					for (int jp = 0; jp < 4; jp++)
-					{
-						float* s = patch.ptr<float>(jp);
-						float* d = &d0[(jp)*width - 2 * jp];
-						__m128 mp1 = _mm_load_ps(s);
-						__m128 sp1 = _mm_loadu_ps(d);
+_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+}
+}
+else if (direct == -3)
+{
+for (int jp = 0; jp < 4; jp++)
+{
+float* s = patch.ptr<float>(jp);
+float* d = &d0[(jp)*width - 2 * jp];
+__m128 mp1 = _mm_load_ps(s);
+__m128 sp1 = _mm_loadu_ps(d);
 
-						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					}
-				}
-				else if (direct == -1)
-				{
-					for (int jp = 0; jp < 4; jp++)
-					{
-						float* s = patch.ptr<float>(jp);
-						float* d = &d0[(jp)*width - jp / 2];
-						__m128 mp1 = _mm_load_ps(s);
-						__m128 sp1 = _mm_loadu_ps(d);
+_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+}
+}
+else if (direct == -1)
+{
+for (int jp = 0; jp < 4; jp++)
+{
+float* s = patch.ptr<float>(jp);
+float* d = &d0[(jp)*width - jp / 2];
+__m128 mp1 = _mm_load_ps(s);
+__m128 sp1 = _mm_loadu_ps(d);
 
-						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					}
-				}
-				else if (direct == -2)
-				{
-					for (int jp = 0; jp < 4; jp++)
-					{
-						float* s = patch.ptr<float>(jp);
-						float* d = &d0[(jp)*width - jp];
-						__m128 mp1 = _mm_load_ps(s);
-						__m128 sp1 = _mm_loadu_ps(d);
+_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+}
+}
+else if (direct == -2)
+{
+for (int jp = 0; jp < 4; jp++)
+{
+float* s = patch.ptr<float>(jp);
+float* d = &d0[(jp)*width - jp];
+__m128 mp1 = _mm_load_ps(s);
+__m128 sp1 = _mm_loadu_ps(d);
 
-						_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
-					}
-				}
-				s0++;
-				d0++;
-			}
-		}
-	}
+_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
+}
+}
+s0++;
+d0++;
+}
+}
+}
 };
 
 
 class DenoiseWeightedDCTShrinkageInvorker8x8 : public cv::ParallelLoopBody
 {
 private:
-	float* src;
-	float* dest;
-	float* weight;
-	float thresh;
-	int width;
-	int height;
+float* src;
+float* dest;
+float* weight;
+float thresh;
+int width;
+int height;
 
 public:
 
-	DenoiseWeightedDCTShrinkageInvorker8x8(float *sim, float* dim, float* wmap, float Th, int w, int h) : src(sim), dest(dim), weight(wmap), width(w), height(h), thresh(Th)
-	{
-		;
-	}
-	virtual void operator() (const Range& range) const
-	{
-		const int size1 = width * height;
-		const int hstep = height - 8 + 1;
-		const int wstep = width - 8 + 1;
-		const int w1 = 1 * width;
-		const int w2 = 2 * width;
-		const int w3 = 3 * width;
-		const int w4 = 4 * width;
-		const int w5 = 5 * width;
-		const int w6 = 6 * width;
-		const int w7 = 7 * width;
-		int j;
+DenoiseWeightedDCTShrinkageInvorker8x8(float *sim, float* dim, float* wmap, float Th, int w, int h) : src(sim), dest(dim), weight(wmap), width(w), height(h), thresh(Th)
+{
+;
+}
+virtual void operator() (const Range& range) const
+{
+const int size1 = width * height;
+const int hstep = height - 8 + 1;
+const int wstep = width - 8 + 1;
+const int w1 = 1 * width;
+const int w2 = 2 * width;
+const int w3 = 3 * width;
+const int w4 = 4 * width;
+const int w5 = 5 * width;
+const int w6 = 6 * width;
+const int w7 = 7 * width;
+int j;
 
-		for (j = range.start; j != range.end; j++)
-		{
-			Mat patch(Size(8, 8), CV_32F);
-			float* ptch = patch.ptr<float>(0);
+for (j = range.start; j != range.end; j++)
+{
+Mat patch(Size(8, 8), CV_32F);
+float* ptch = patch.ptr<float>(0);
 
-			float* s0 = &src[width*j];
-			float* d0 = &dest[width*j];
-			float* w0 = &weight[width*j];
-			const int sz = sizeof(float) * 8;
-			for (int i = 0; i < wstep; i++)
-			{
-				memcpy(ptch, s0, sz);
-				memcpy(ptch + 8, s0 + w1, sz);
-				memcpy(ptch + 16, s0 + w2, sz);
-				memcpy(ptch + 24, s0 + w3, sz);
-				memcpy(ptch + 32, s0 + w4, sz);
-				memcpy(ptch + 40, s0 + w5, sz);
-				memcpy(ptch + 48, s0 + w6, sz);
-				memcpy(ptch + 56, s0 + w7, sz);
+float* s0 = &src[width*j];
+float* d0 = &dest[width*j];
+float* w0 = &weight[width*j];
+const int sz = sizeof(float) * 8;
+for (int i = 0; i < wstep; i++)
+{
+memcpy(ptch, s0, sz);
+memcpy(ptch + 8, s0 + w1, sz);
+memcpy(ptch + 16, s0 + w2, sz);
+memcpy(ptch + 24, s0 + w3, sz);
+memcpy(ptch + 32, s0 + w4, sz);
+memcpy(ptch + 40, s0 + w5, sz);
+memcpy(ptch + 48, s0 + w6, sz);
+memcpy(ptch + 56, s0 + w7, sz);
 
-				int v = fDCT8x8__threshold_keep00_iDCT8x8_nonzero(ptch, thresh);
-				const __m128 mw = _mm_set1_ps((float)(v));
+int v = fDCT8x8__threshold_keep00_iDCT8x8_nonzero(ptch, thresh);
+const __m128 mw = _mm_set1_ps((float)(v));
 
-				//add data
-				for (int jp = 0; jp < 8; jp++)
-				{
-					float* s = patch.ptr<float>(jp);
-					float* d = &d0[(jp)*width];
-					float* w = &w0[(jp)*width];
-					__m128 mp1 = _mm_load_ps(s);
-					__m128 sp1 = _mm_loadu_ps(d);
-					__m128 mw1 = _mm_loadu_ps(w);
+//add data
+for (int jp = 0; jp < 8; jp++)
+{
+float* s = patch.ptr<float>(jp);
+float* d = &d0[(jp)*width];
+float* w = &w0[(jp)*width];
+__m128 mp1 = _mm_load_ps(s);
+__m128 sp1 = _mm_loadu_ps(d);
+__m128 mw1 = _mm_loadu_ps(w);
 
-					_mm_storeu_ps(w, _mm_add_ps(mw1, mw));
-					_mm_storeu_ps(d, _mm_add_ps(sp1, _mm_mul_ps(mp1, mw)));
+_mm_storeu_ps(w, _mm_add_ps(mw1, mw));
+_mm_storeu_ps(d, _mm_add_ps(sp1, _mm_mul_ps(mp1, mw)));
 
-					s += 4;
-					d += 4;
-					w += 4;
+s += 4;
+d += 4;
+w += 4;
 
-					mp1 = _mm_load_ps(s);
-					sp1 = _mm_loadu_ps(d);
-					mw1 = _mm_loadu_ps(w);
+mp1 = _mm_load_ps(s);
+sp1 = _mm_loadu_ps(d);
+mw1 = _mm_loadu_ps(w);
 
-					_mm_storeu_ps(w, _mm_add_ps(mw1, mw));
-					_mm_storeu_ps(d, _mm_add_ps(sp1, _mm_mul_ps(mp1, mw)));
-				}
-				s0++;
-				d0++;
-				w0++;
-			}
-		}
-	}
+_mm_storeu_ps(w, _mm_add_ps(mw1, mw));
+_mm_storeu_ps(d, _mm_add_ps(sp1, _mm_mul_ps(mp1, mw)));
+}
+s0++;
+d0++;
+w0++;
+}
+}
+}
 };
 
 class DenoiseWeightedDCTShrinkageInvorker4x4 : public cv::ParallelLoopBody
 {
 private:
-	float* src;
-	float* dest;
-	float* weight;
-	float thresh;
-	int width;
-	int height;
+float* src;
+float* dest;
+float* weight;
+float thresh;
+int width;
+int height;
 
 public:
-	DenoiseWeightedDCTShrinkageInvorker4x4(float *sim, float* dim, float* wmap, float Th, int w, int h) : src(sim), dest(dim), weight(wmap), width(w), height(h), thresh(Th)
-	{
-		;
-	}
-	virtual void operator() (const Range& range) const
-	{
-		const int size1 = width * height;
-		const int hstep = height - 4 + 1;
-		const int wstep = width - 4 + 1;
-		const int w1 = 1 * width;
-		const int w2 = 2 * width;
-		const int w3 = 3 * width;
+DenoiseWeightedDCTShrinkageInvorker4x4(float *sim, float* dim, float* wmap, float Th, int w, int h) : src(sim), dest(dim), weight(wmap), width(w), height(h), thresh(Th)
+{
+;
+}
+virtual void operator() (const Range& range) const
+{
+const int size1 = width * height;
+const int hstep = height - 4 + 1;
+const int wstep = width - 4 + 1;
+const int w1 = 1 * width;
+const int w2 = 2 * width;
+const int w3 = 3 * width;
 
-		int j;
-		Mat buff(Size(4, 4), CV_32F); Mat mask;
-		for (j = range.start; j != range.end; j++)
-		{
-			Mat patch(Size(4, 4), CV_32F);
-			float* ptch = patch.ptr<float>(0);
+int j;
+Mat buff(Size(4, 4), CV_32F); Mat mask;
+for (j = range.start; j != range.end; j++)
+{
+Mat patch(Size(4, 4), CV_32F);
+float* ptch = patch.ptr<float>(0);
 
-			float* s0 = &src[width*j];
-			float* d0 = &dest[width*j];
-			float* w0 = &weight[width*j];
-			const int sz = sizeof(float) * 4;
-			for (int i = 0; i < wstep; i++)
-			{
-				memcpy(ptch, s0, sz);
-				memcpy(ptch + 4, s0 + w1, sz);
-				memcpy(ptch + 8, s0 + w2, sz);
-				memcpy(ptch + 12, s0 + w3, sz);
+float* s0 = &src[width*j];
+float* d0 = &dest[width*j];
+float* w0 = &weight[width*j];
+const int sz = sizeof(float) * 4;
+for (int i = 0; i < wstep; i++)
+{
+memcpy(ptch, s0, sz);
+memcpy(ptch + 4, s0 + w1, sz);
+memcpy(ptch + 8, s0 + w2, sz);
+memcpy(ptch + 12, s0 + w3, sz);
 
-				//Mat p2 = patch.clone();
-				int v = fDCT4x4_threshold_keep00_iDCT4x4_nonzero(patch.ptr<float>(0), thresh);
+//Mat p2 = patch.clone();
+int v = fDCT4x4_threshold_keep00_iDCT4x4_nonzero(patch.ptr<float>(0), thresh);
 
-				//float vv = norm(patch,p2,NORM_L1);
-				//add data
-				//const __m128 mw = _mm_set1_ps((float)(256.f-v*v));
-				const __m128 mw = _mm_set1_ps((float)(v));
-				//const __m128 mw = _mm_set1_ps((float)(vv));
-				for (int jp = 0; jp < 4; jp++)
-				{
-					float* s = patch.ptr<float>(jp);
-					float* d = &d0[(jp)*width];
-					float* w = &w0[(jp)*width];
+//float vv = norm(patch,p2,NORM_L1);
+//add data
+//const __m128 mw = _mm_set1_ps((float)(256.f-v*v));
+const __m128 mw = _mm_set1_ps((float)(v));
+//const __m128 mw = _mm_set1_ps((float)(vv));
+for (int jp = 0; jp < 4; jp++)
+{
+float* s = patch.ptr<float>(jp);
+float* d = &d0[(jp)*width];
+float* w = &w0[(jp)*width];
 
-					__m128 mp1 = _mm_load_ps(s);
-					__m128 mw1 = _mm_loadu_ps(w);
-					__m128 sp1 = _mm_loadu_ps(d);
+__m128 mp1 = _mm_load_ps(s);
+__m128 mw1 = _mm_loadu_ps(w);
+__m128 sp1 = _mm_loadu_ps(d);
 
-					_mm_storeu_ps(w, _mm_add_ps(mw1, mw));
-					_mm_storeu_ps(d, _mm_add_ps(sp1, _mm_mul_ps(mw, mp1)));
-				}
-				s0++;
-				d0++;
-				w0++;
-			}
-		}
-	}
+_mm_storeu_ps(w, _mm_add_ps(mw1, mw));
+_mm_storeu_ps(d, _mm_add_ps(sp1, _mm_mul_ps(mw, mp1)));
+}
+s0++;
+d0++;
+w0++;
+}
+}
+}
 };
 */
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //TBB DHT tbbdht///////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-class DenoiseDHTShrinkageInvorker16x16 : public cv::ParallelLoopBody
+class RDHTThresholdingInvorker16x16 : public cv::ParallelLoopBody
 {
 private:
 	float* src;
@@ -816,19 +895,34 @@ private:
 	int height;
 
 public:
-
-	DenoiseDHTShrinkageInvorker16x16(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
+	int EvenOddFull;
+	RDHTThresholdingInvorker16x16(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
-		;
+		EvenOddFull = 0;
 	}
 	virtual void operator() (const Range& range) const
 	{
 		const int size1 = width * height;
-		const int hstep = height - 16 + 1;
-		const int wstep = width - 16 + 1;
+		const int hstep = height - 16;
+		const int wstep = width - 16;
 
-		int j;
-		for (j = range.start; j != range.end; j++)
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
 		{
 			Mat patch(Size(16, 16), CV_32F);
 			float* ptch = patch.ptr<float>(0);
@@ -836,6 +930,7 @@ public:
 			float* s0 = &src[width*j];
 			float* d0 = &dest[width*j];
 			const int sz = sizeof(float) * 16;
+
 			for (int i = 0; i < wstep; i++)
 			{
 				for (int n = 0; n < 16; n++)
@@ -879,7 +974,7 @@ public:
 	}
 };
 
-class DenoiseDHTShrinkageInvorker8x8 : public cv::ParallelLoopBody
+class RDHTThresholdingInvorker8x8 : public cv::ParallelLoopBody
 {
 private:
 	float* src;
@@ -889,16 +984,16 @@ private:
 	int height;
 
 public:
-
-	DenoiseDHTShrinkageInvorker8x8(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
+	int EvenOddFull;
+	RDHTThresholdingInvorker8x8(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
-		;
+		EvenOddFull = 0;
 	}
 	virtual void operator() (const Range& range) const
 	{
 		const int size1 = width * height;
-		const int hstep = height - 8 + 1;
-		const int wstep = width - 8 + 1;
+		const int hstep = height - 8;
+		const int wstep = width - 8;
 		const int w1 = 1 * width;
 		const int w2 = 2 * width;
 		const int w3 = 3 * width;
@@ -906,9 +1001,24 @@ public:
 		const int w5 = 5 * width;
 		const int w6 = 6 * width;
 		const int w7 = 7 * width;
-		int j;
 
-		for (j = range.start; j != range.end; j++)
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
 		{
 			Mat patch(Size(8, 8), CV_32F);
 			float* ptch = patch.ptr<float>(0);
@@ -916,6 +1026,7 @@ public:
 			float* s0 = &src[width*j];
 			float* d0 = &dest[width*j];
 			const int sz = sizeof(float) * 8;
+
 			for (int i = 0; i < wstep; i++)
 			{
 				memcpy(ptch, s0, sz);
@@ -927,9 +1038,7 @@ public:
 				memcpy(ptch + 48, s0 + w6, sz);
 				memcpy(ptch + 56, s0 + w7, sz);
 
-
 				Hadamard2D8x8andThreshandIDHT(ptch, thresh);
-
 
 				//add data
 				for (int jp = 0; jp < 8; jp++)
@@ -938,7 +1047,6 @@ public:
 					float* d = &d0[(jp)*width];
 					__m128 mp1 = _mm_load_ps(s);
 					__m128 sp1 = _mm_loadu_ps(d);
-
 					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
 
 					s += 4;
@@ -953,10 +1061,9 @@ public:
 			}
 		}
 	}
-
 };
 
-class DenoiseDHTShrinkageInvorker4x4 : public cv::ParallelLoopBody
+class RDHTThresholdingInvorker4x4 : public cv::ParallelLoopBody
 {
 private:
 	float* src;
@@ -966,22 +1073,37 @@ private:
 	int height;
 
 public:
-
-	DenoiseDHTShrinkageInvorker4x4(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
+	int EvenOddFull;
+	RDHTThresholdingInvorker4x4(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
 	{
-		;
+		EvenOddFull = 0;
 	}
 	virtual void operator() (const Range& range) const
 	{
 		const int size1 = width * height;
-		const int hstep = height - 4 + 1;
-		const int wstep = width - 4 + 1;
+		const int hstep = height - 4;
+		const int wstep = width - 4;
 		const int w1 = 1 * width;
 		const int w2 = 2 * width;
 		const int w3 = 3 * width;
-		int j;
 
-		for (j = range.start; j != range.end; j++)
+		int start, end;
+		if (EvenOddFull < 0)
+		{
+			start = range.start;
+			end = range.end;
+		}
+		else if (EvenOddFull == 0)
+		{
+			start = range.start;
+			end = range.start + (range.end - range.start) / 2;
+		}
+		if (EvenOddFull == 1)
+		{
+			start = range.start + (range.end - range.start) / 2;
+			end = range.end;
+		}
+		for (int j = start; j != end; j++)
 		{
 			Mat patch(Size(4, 4), CV_32F);
 			float* ptch = patch.ptr<float>(0);
@@ -989,13 +1111,13 @@ public:
 			float* s0 = &src[width*j];
 			float* d0 = &dest[width*j];
 			const int sz = sizeof(float) * 4;
+
 			for (int i = 0; i < wstep; i++)
 			{
 				memcpy(ptch, s0, sz);
 				memcpy(ptch + 4, s0 + w1, sz);
 				memcpy(ptch + 8, s0 + w2, sz);
 				memcpy(ptch + 12, s0 + w3, sz);
-
 
 				Hadamard2D4x4andThreshandIDHT(ptch, thresh);
 
@@ -1006,7 +1128,6 @@ public:
 					float* d = &d0[(jp)*width];
 					__m128 mp1 = _mm_load_ps(s);
 					__m128 sp1 = _mm_loadu_ps(d);
-
 					_mm_storeu_ps(d, _mm_add_ps(sp1, mp1));
 				}
 				s0++;
@@ -1015,131 +1136,6 @@ public:
 		}
 	}
 };
-
-
-class DenoiseDHTShrinkageInvorker4x4S : public cv::ParallelLoopBody
-{
-private:
-	float* src;
-	float* dest;
-	float thresh;
-	int width;
-	int height;
-
-public:
-
-	DenoiseDHTShrinkageInvorker4x4S(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
-	{
-		;
-	}
-	virtual void operator() (const Range& range) const
-	{
-		const int size1 = width * height;
-		const int hstep = height - 4 + 1;
-		const int wstep = width - 4 + 1;
-		const int w1 = 1 * width;
-		const int w2 = 2 * width;
-		const int w3 = 3 * width;
-		int j;
-
-		for (j = range.start; j != range.end; j++)
-		{
-			Mat patch(Size(4, 4), CV_32F);
-			float* ptch = patch.ptr<float>(0);
-
-			float* s0 = &src[width*j];
-			float* d0 = &dest[width*j];
-			const int sz = sizeof(float) * 4;
-			for (int i = 0; i < wstep; i++)
-			{
-				memcpy(ptch, s0, sz);
-				memcpy(ptch + 4, s0 + w1 + 1, sz);
-				memcpy(ptch + 8, s0 + w2 + 2, sz);
-				memcpy(ptch + 12, s0 + w3 + 3, sz);
-
-				Hadamard2D4x4andThreshandIDHT(ptch, thresh);
-
-				//add data
-				for (int jp = 0; jp < 4; jp++)
-				{
-					float* s = patch.ptr<float>(jp);
-					float* d = &d0[(jp)*width];
-					__m128 mp1 = _mm_load_ps(s);
-					__m128 sp1 = _mm_loadu_ps(d + jp);
-
-					_mm_storeu_ps(d + jp, _mm_add_ps(sp1, mp1));
-				}
-				s0++;
-				d0++;
-			}
-		}
-	}
-};
-
-
-class DenoiseDHTShrinkageInvorker4x4S2 : public cv::ParallelLoopBody
-{
-private:
-	float* src;
-	float* dest;
-	float thresh;
-	int width;
-	int height;
-
-public:
-
-	DenoiseDHTShrinkageInvorker4x4S2(float *sim, float* dim, float Th, int w, int h) : src(sim), dest(dim), width(w), height(h), thresh(Th)
-	{
-		;
-	}
-	virtual void operator() (const Range& range) const
-	{
-		const int size1 = width * height;
-		const int hstep = height - 4 + 1;
-		const int wstep = width - 4 + 1;
-		const int w1 = 1 * width;
-		const int w2 = 2 * width;
-		const int w3 = 3 * width;
-		int j;
-
-		for (j = range.start; j != range.end; j++)
-		{
-			Mat patch(Size(4, 4), CV_32F);
-			float* ptch = patch.ptr<float>(0);
-
-			float* s0 = &src[width*j];
-			float* d0 = &dest[width*j];
-			const int sz = sizeof(float) * 4;
-			for (int i = 0; i < wstep; i++)
-			{
-				memcpy(ptch, s0, sz);
-				memcpy(ptch + 4, s0 + w1 - 1, sz);
-				memcpy(ptch + 8, s0 + w2 - 2, sz);
-				memcpy(ptch + 12, s0 + w3 - 3, sz);
-
-
-				Hadamard2D4x4andThreshandIDHT(ptch, thresh);
-
-				//add data
-				for (int jp = 0; jp < 4; jp++)
-				{
-					float* s = patch.ptr<float>(jp);
-					float* d = &d0[(jp)*width];
-					__m128 mp1 = _mm_load_ps(s);
-					__m128 sp1 = _mm_loadu_ps(d - jp);
-
-					_mm_storeu_ps(d - jp, _mm_add_ps(sp1, mp1));
-				}
-				s0++;
-				d0++;
-			}
-		}
-	}
-};
-
-
-
-
 
 void ivDWT8x8(float* src)
 {
@@ -1621,7 +1617,7 @@ void RedundantDXTDenoise::decorrelateColorInvert(float* src, float* dest, int wi
 	const int size2 = 2 * size1;
 
 
-	//#pragma omp parallel for
+#pragma omp parallel for
 	for (int j = 0; j < height; j++)
 	{
 		float* s0 = src + width*j;
@@ -1676,7 +1672,7 @@ void RedundantDXTDenoise::decorrelateColorForward(float* src, float* dest, int w
 	const int size1 = width*height;
 	const int size2 = 2 * size1;
 
-	//#pragma omp parallel for
+#pragma omp parallel for
 	for (int j = 0; j < height; j++)
 	{
 		float* s0 = src + width*j;
@@ -1722,9 +1718,7 @@ void RedundantDXTDenoise::decorrelateColorForward(float* src, float* dest, int w
 
 void RedundantDXTDenoise::body(float *src, float* dest, float Th)
 {
-	int v = getNumThreads();
-	int c = getNumberOfCPUs();
-	int thread = v/c;
+	int numThreads = getNumThreads();
 
 	if (basis == BASIS::DCT)
 	{
@@ -1733,33 +1727,45 @@ void RedundantDXTDenoise::body(float *src, float* dest, float Th)
 			if (patch_size.width == 2)
 			{
 				RDCTThresholdingInvorker2x2 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else if (patch_size.width == 4)
 			{
 				RDCTThresholdingInvorker4x4 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12.0);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else if (patch_size.width == 8)
 			{
 				RDCTThresholdingInvorker8x8 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else if (patch_size.width == 16)
 			{
 				RDCTThresholdingInvorker16x16 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else
 			{
 				RDCTThresholdingInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 		}
 		else
 		{
 			RDCTThresholdingInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
+			parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+			invork.EvenOddFull = 1;
+			parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 		}
 	}
 	else if (basis == BASIS::DHT)
@@ -1770,27 +1776,37 @@ void RedundantDXTDenoise::body(float *src, float* dest, float Th)
 			{
 				//2x2 is same as DCT
 				RDCTThresholdingInvorker2x2 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else if (patch_size.width == 4)
 			{
-				DenoiseDHTShrinkageInvorker4x4 invork(src,dest,Th, size.width,size.height);			
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
+				RDHTThresholdingInvorker4x4 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else if (patch_size.width == 8)
 			{
-				DenoiseDHTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
+				RDHTThresholdingInvorker8x8 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else if (patch_size.width == 16)
 			{
-				DenoiseDHTShrinkageInvorker16x16 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
+				RDHTThresholdingInvorker16x16 invork(src, dest, Th, size.width, size.height);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 			else
 			{
 				RDCTThresholdingInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
+				invork.EvenOddFull = 1;
+				parallel_for_(Range(0, size.height - patch_size.height), invork, numThreads);
 			}
 		}
 		else
@@ -1815,189 +1831,6 @@ void RedundantDXTDenoise::body(float *src, float* dest, float Th)
 	}
 }
 
-void RedundantDXTDenoise::body(float *src, float* dest, float* wmap, float Th)
-{
-	/*
-	if (basis == BASIS::DHT)
-	{
-		if (isSSE)
-		{
-			if (patch_size.width == 2)
-			{
-				DenoiseDCTShrinkageInvorker2x2 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else if (patch_size.width == 4)
-			{
-				DenoiseDCTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12.0);
-			}
-			else if (patch_size.width == 8)
-			{
-				RDCTThresholdingInvorker8x8 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12.0);
-			}
-			else if (patch_size.width == 16)
-			{
-				RDCTThresholdingInvorker16x16 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else
-			{
-				DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-		}
-		else
-		{
-			DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-	}
-	else if (basis == BASIS::DHT)
-	{
-		if (isSSE)
-		{
-			if (patch_size.width == 2)
-			{
-				//2x2 is same as DCT
-				DenoiseDCTShrinkageInvorker2x2 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else if (patch_size.width == 4)
-			{
-				ShearableDenoiseDCTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height, 0);
-				//DenoiseDHTShrinkageInvorker4x4 invork(src,dest,Th, size.width,size.height);			
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
-			}
-			else if (patch_size.width == 8)
-			{
-				DenoiseDHTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else if (patch_size.width == 16)
-			{
-				DenoiseDHTShrinkageInvorker16x16 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else
-			{
-				DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-		}
-		else
-		{
-			DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-	}
-	else if (basis == BASIS::DWT)
-	{
-		if (patch_size.width == 4)
-		{
-			DenoiseDWTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height);
-			//DenoiseDHTShrinkageInvorker4x4S invork(src,dest,Th, size.width,size.height);			
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-		else if (patch_size.width == 8)
-		{
-			DenoiseDWTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-	}
-	*/
-}
-
-
-void RedundantDXTDenoise::body(float *src, float* dest, float Th, int dr)
-{
-	/*
-	if (basis == BASIS::DHT)
-	{
-		if (isSSE)
-		{
-			if (patch_size.width == 2)
-			{
-				DenoiseDCTShrinkageInvorker2x2 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else if (patch_size.width == 4)
-			{
-				ShearableDenoiseDCTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height, dr);
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12.0);
-			}
-			else if (patch_size.width == 8)
-			{
-				DenoiseDCTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else
-			{
-				DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-		}
-		else
-		{
-			DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-	}
-	else if (basis == BASIS::DHT)
-	{
-		if (isSSE)
-		{
-			if (patch_size.width == 2)
-			{
-				//2x2 is same as DCT
-				DenoiseDCTShrinkageInvorker2x2 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else if (patch_size.width == 4)
-			{
-				ShearableDenoiseDCTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height, dr);
-				//DenoiseDHTShrinkageInvorker4x4 invork(src,dest,Th, size.width,size.height);			
-				parallel_for_(Range(0, size.height - patch_size.height), invork, 12);
-			}
-			else if (patch_size.width == 8)
-			{
-				DenoiseDHTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else if (patch_size.width == 16)
-			{
-				DenoiseDHTShrinkageInvorker16x16 invork(src, dest, Th, size.width, size.height);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-			else
-			{
-				DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-				parallel_for_(Range(0, size.height - patch_size.height), invork);
-			}
-		}
-		else
-		{
-			DenoiseDCTShrinkageInvorker invork(src, dest, Th, size.width, size.height, patch_size);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-	}
-	else if (basis == BASIS::DWT)
-	{
-		if (patch_size.width == 4)
-		{
-			DenoiseDWTShrinkageInvorker4x4 invork(src, dest, Th, size.width, size.height);
-			//DenoiseDHTShrinkageInvorker4x4S invork(src,dest,Th, size.width,size.height);			
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-		else if (patch_size.width == 8)
-		{
-			DenoiseDWTShrinkageInvorker8x8 invork(src, dest, Th, size.width, size.height);
-			parallel_for_(Range(0, size.height - patch_size.height), invork);
-		}
-	}
-	*/
-}
 /*
 void RedundantDXTDenoise::shearable(Mat& src_, Mat& dest, float sigma, Size psize, int transform_basis, int direct)
 {
@@ -2319,7 +2152,7 @@ void RedundantDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psi
 	float* opixels;
 
 	// Threshold
-	float Th = getThreshold(sigma); 
+	float Th = getThreshold(sigma);
 
 	// DCT window size
 	{

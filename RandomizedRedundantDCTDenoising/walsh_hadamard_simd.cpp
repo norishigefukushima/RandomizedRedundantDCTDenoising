@@ -4,6 +4,7 @@
 #include <nmmintrin.h> //SSE4.2
 #include <string.h>
 
+#define _KEEP_00_COEF_
 void transpose4x4(float* inplace);
 void transpose4x4(const float* src, float* dest);
 void transpose8x8(float* inplace);
@@ -183,7 +184,6 @@ void Hadamard1D16x16(float *val)
 		xmm1 = _mm_mul_ps(xmm1, sgn0); //x1 x2 x3 x4 => x1 -x2 x3 -x4
 		mmadd3 = _mm_add_ps(xmm0, xmm1);
 
-
 		////////////
 
 		xmm1 = xmm0 = mmadd0; //x1 x2 x3 x4
@@ -283,8 +283,6 @@ void divval(float* src, int size, float div)
 		_mm_store_ps(src + i, _mm_mul_ps(_mm_load_ps(src + i), h));
 	}
 }
-
-
 
 void divvalandthresh(float* src, int size, float thresh, float div)
 {
@@ -802,7 +800,6 @@ void Hadamard2D8x8i_and_thresh(float *vall, float thresh)
 		xmm1 = _mm_mul_ps(xmm1, sgn0); //x1 x2 x3 x4 => x1 -x2 x3 -x4
 		__m128 mmaddvalue0 = _mm_add_ps(xmm0, xmm1);
 
-
 		xmm1 = xmm0 = _mm_load_ps(val + 4); //x1 x2 x3 x4
 		xmm0 = _mm_shuffle_ps(xmm0, xmm1, 0xb1); //x1 x2 x3 x4 => x2 x1 x4 x3
 		xmm1 = _mm_mul_ps(xmm1, sgn0); //x1 x2 x3 x4 => x1 -x2 x3 -x4
@@ -881,6 +878,7 @@ void Hadamard2D8x8i_and_thresh(float *vall, float thresh)
 		val += 8;
 	}
 };
+
 void Hadamard2D8x8andThreshandIDHT(float* src, float thresh)
 {
 	Hadamard2D8x8i_and_thresh(src, thresh);

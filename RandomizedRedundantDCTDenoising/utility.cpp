@@ -1,7 +1,318 @@
-
-#include <opencv2/opencv.hpp>
-using namespace std;
+#include "RedundantDXTDenoise.h"
 using namespace cv;
+using namespace std;
+
+double YPSNR(InputArray src1, InputArray src2)
+{
+	Mat g1, g2;
+	if (src1.channels() == 1) g1 = src1.getMat();
+	else cvtColor(src1, g1, COLOR_BGR2GRAY);
+	if (src2.channels() == 1) g2 = src2.getMat();
+	else cvtColor(src2, g2, COLOR_BGR2GRAY);
+
+	return PSNR(g1, g2);
+}
+
+template <class T>
+void addNoiseSoltPepperMono_(Mat& src, Mat& dest, double per)
+{
+	cv::RNG rng;
+	for (int j = 0; j < src.rows; j++)
+	{
+		T* s = src.ptr<T>(j);
+		T* d = dest.ptr<T>(j);
+		for (int i = 0; i < src.cols; i++)
+		{
+			double a1 = rng.uniform((double)0, (double)1);
+
+			if (a1 > per)
+				d[i] = s[i];
+			else
+			{
+				double a2 = rng.uniform((double)0, (double)1);
+				if (a2 > 0.5)d[i] = (T)0.0;
+				else d[i] = (T)255.0;
+			}
+		}
+	}
+}
+
+void addNoiseSoltPepperMono(Mat& src, Mat& dest, double per)
+{
+	if (src.type() == CV_8U) addNoiseSoltPepperMono_<uchar>(src, dest, per);
+	if (src.type() == CV_16U) addNoiseSoltPepperMono_<ushort>(src, dest, per);
+	if (src.type() == CV_16S) addNoiseSoltPepperMono_<short>(src, dest, per);
+	if (src.type() == CV_32S) addNoiseSoltPepperMono_<int>(src, dest, per);
+	if (src.type() == CV_32F) addNoiseSoltPepperMono_<float>(src, dest, per);
+	if (src.type() == CV_64F) addNoiseSoltPepperMono_<double>(src, dest, per);
+}
+
+void addNoiseMono_nf(Mat& src, Mat& dest, double sigma)
+{
+	Mat s;
+	src.convertTo(s, CV_32S);
+	Mat n(s.size(), CV_32S);
+	randn(n, 0, sigma);
+	Mat temp = s + n;
+	temp.convertTo(dest, src.type());
+}
+
+void addNoiseMono_f(Mat& src, Mat& dest, double sigma)
+{
+	Mat s;
+	src.convertTo(s, CV_64F);
+	Mat n(s.size(), CV_64F);
+	randn(n, 0, sigma);
+	Mat temp = s + n;
+	temp.convertTo(dest, src.type());
+}
+
+void addNoiseMono(Mat& src, Mat& dest, double sigma)
+{
+	if (src.type() == CV_32F || src.type() == CV_64F)
+	{
+		addNoiseMono_f(src, dest, sigma);
+	}
+	else
+	{
+		addNoiseMono_nf(src, dest, sigma);
+	}
+}
+
+void addNoise(InputArray src_, OutputArray dest_, double sigma, double sprate)
+{
+	if (dest_.empty() || dest_.size() != src_.size() || dest_.type() != src_.type()) dest_.create(src_.size(), src_.type());
+	Mat src = src_.getMat();
+	Mat dest = dest_.getMat();
+	if (src.channels() == 1)
+	{
+		addNoiseMono(src, dest, sigma);
+		if (sprate != 0)addNoiseSoltPepperMono(dest, dest, sprate);
+		return;
+	}
+	else
+	{
+		vector<Mat> s(src.channels());
+		vector<Mat> d(src.channels());
+		split(src, s);
+		for (int i = 0; i < src.channels(); i++)
+		{
+			addNoiseMono(s[i], d[i], sigma);
+			if (sprate != 0)addNoiseSoltPepperMono(d[i], d[i], sprate);
+		}
+		cv::merge(d, dest);
+	}
+}
+
+void CalcTime::start()
+{
+	pre = getTickCount();
+}
+
+void CalcTime::restart()
+{
+	start();
+}
+
+void CalcTime::lap(string message)
+{
+	string v = message + format(" %f", getTime());
+	switch (timeMode)
+	{
+	case TIME_NSEC:
+		v += " NSEC";
+		break;
+	case TIME_SEC:
+		v += " SEC";
+		break;
+	case TIME_MIN:
+		v += " MIN";
+		break;
+	case TIME_HOUR:
+		v += " HOUR";
+		break;
+
+	case TIME_MSEC:
+	default:
+		v += " msec";
+		break;
+	}
+
+
+	lap_mes.push_back(v);
+	restart();
+}
+void CalcTime::show()
+{
+	getTime();
+
+	int mode = timeMode;
+	if (timeMode == TIME_AUTO)
+	{
+		mode = autoMode;
+	}
+
+	switch (mode)
+	{
+	case TIME_NSEC:
+		cout << mes << ": " << cTime << " nsec" << endl;
+		break;
+	case TIME_SEC:
+		cout << mes << ": " << cTime << " sec" << endl;
+		break;
+	case TIME_MIN:
+		cout << mes << ": " << cTime << " minute" << endl;
+		break;
+	case TIME_HOUR:
+		cout << mes << ": " << cTime << " hour" << endl;
+		break;
+
+	case TIME_MSEC:
+	default:
+		cout << mes << ": " << cTime << " msec" << endl;
+		break;
+	}
+}
+
+void CalcTime::show(string mes)
+{
+	getTime();
+
+	int mode = timeMode;
+	if (timeMode == TIME_AUTO)
+	{
+		mode = autoMode;
+	}
+
+	switch (mode)
+	{
+	case TIME_NSEC:
+		cout << mes << ": " << cTime << " nsec" << endl;
+		break;
+	case TIME_SEC:
+		cout << mes << ": " << cTime << " sec" << endl;
+		break;
+	case TIME_MIN:
+		cout << mes << ": " << cTime << " minute" << endl;
+		break;
+	case TIME_HOUR:
+		cout << mes << ": " << cTime << " hour" << endl;
+		break;
+	case TIME_DAY:
+		cout << mes << ": " << cTime << " day" << endl;
+	case TIME_MSEC:
+		cout << mes << ": " << cTime << " msec" << endl;
+		break;
+	default:
+		cout << mes << ": error" << endl;
+		break;
+	}
+}
+
+int CalcTime::autoTimeMode()
+{
+	if (cTime > 60.0*60.0*24.0)
+	{
+		return TIME_DAY;
+	}
+	else if (cTime > 60.0*60.0)
+	{
+		return TIME_HOUR;
+	}
+	else if (cTime > 60.0)
+	{
+		return TIME_MIN;
+	}
+	else if (cTime > 1.0)
+	{
+		return TIME_SEC;
+	}
+	else if (cTime > 1.0 / 1000.0)
+	{
+		return TIME_MSEC;
+	}
+	else
+	{
+
+		return TIME_NSEC;
+	}
+}
+double CalcTime::getTime()
+{
+	cTime = (getTickCount() - pre) / (getTickFrequency());
+
+	int mode = timeMode;
+	if (mode == TIME_AUTO)
+	{
+		mode = autoTimeMode();
+		autoMode = mode;
+	}
+
+	switch (mode)
+	{
+	case TIME_NSEC:
+		cTime *= 1000000.0;
+		break;
+	case TIME_SEC:
+		cTime *= 1.0;
+		break;
+	case TIME_MIN:
+		cTime /= (60.0);
+		break;
+	case TIME_HOUR:
+		cTime /= (60 * 60);
+		break;
+	case TIME_DAY:
+		cTime /= (60 * 60 * 24);
+		break;
+	case TIME_MSEC:
+	default:
+		cTime *= 1000.0;
+		break;
+	}
+	return cTime;
+}
+void CalcTime::setMessage(string src)
+{
+	mes = src;
+}
+void CalcTime::setMode(int mode)
+{
+	timeMode = mode;
+}
+
+void CalcTime::init(string message, int mode, bool isShow)
+{
+	_isShow = isShow;
+	timeMode = mode;
+
+	setMessage(message);
+	start();
+}
+
+
+CalcTime::CalcTime()
+{
+	init("time ", TIME_AUTO, true);
+}
+
+CalcTime::CalcTime(string message, int mode, bool isShow)
+{
+	init(message, mode, isShow);
+}
+CalcTime::~CalcTime()
+{
+	getTime();
+	if (_isShow)	show();
+	if (lap_mes.size() != 0)
+	{
+		for (int i = 0; i < lap_mes.size(); i++)
+		{
+			cout << lap_mes[i] << endl;
+		}
+	}
+}
+
 
 void cvtColorBGR2PLANE_8u(const Mat& src, Mat& dest)
 {

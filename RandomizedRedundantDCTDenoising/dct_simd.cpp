@@ -2473,9 +2473,8 @@ void fDCT2x2_2pack_thresh_keep00_iDCT2x2_2pack(float* src, float* dest, float th
 
 	__m128 msk = _mm_cmpgt_ps(_mm_and_ps(a, *(const __m128*)v32f_absmask), mth);
 	ms0 = _mm_blendv_ps(_mm_setzero_ps(), a, msk);
-#ifdef _KEEP_00_COEF_
 	ms0 = _mm_blend_ps(ms0, a, 1);
-#endif
+
 	msk = _mm_cmpgt_ps(_mm_and_ps(b, *(const __m128*)v32f_absmask), mth);
 	ms1 = _mm_blendv_ps(_mm_setzero_ps(), b, msk);
 
