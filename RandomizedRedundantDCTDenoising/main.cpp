@@ -3,7 +3,7 @@
 using namespace std;
 using namespace cv;
 
-//#define OPENCV_DCTDENOISE 
+#define OPENCV_DCTDENOISE 
 #ifdef OPENCV_DCTDENOISE
 #include <opencv2/xphoto.hpp>
 #ifdef _DEBUG
@@ -92,7 +92,7 @@ int main(int argc, const char *argv[])
 {
 	{
 		//for debug
-		Mat src_ = imread("img/kodim07.png"); Mat src, dest; resize(src_, src, Size(1024, 1024)); guiDenoise(src, dest);
+		//Mat src_ = imread("img/kodim07.png"); Mat src, dest; resize(src_, src, Size(1024, 1024)); guiDenoise(src, dest);
 	}
 
 	const string keys =

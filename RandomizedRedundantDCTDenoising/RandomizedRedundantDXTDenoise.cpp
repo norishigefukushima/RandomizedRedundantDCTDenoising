@@ -1695,7 +1695,6 @@ void RRDXTDenoise::operator()(Mat& src_, Mat& dest, float sigma, Size psize, BAS
 	}
 	if (channel == 3) div(opixels, opixels + size1, opixels + 2 * size1, cmap.ptr<float>(0), size1);
 	else divide(sum, cmap, sum);
-
 	{
 		// inverse 3-point DCT transform in the color dimension
 		if (channel == 3)
