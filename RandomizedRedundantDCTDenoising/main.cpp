@@ -1,3 +1,11 @@
+//////////////////////////////////////////////////////////////////////////////////////////////
+//Author Norishige Fukushima
+//LICENSE: 3-clause BSD license
+//For demonstration code for S. Fujita, N. Fukushima, M. Kimura, and Y. Ishibashi, 
+//"Randomized Redundant DCT: Efficient Denoising by Using Random Subsampling of DCT Patches," 
+//in Proc. ACM SIGGRAPH Asia Technical Briefs, Nov. 2015.
+//http://fukushima.web.nitech.ac.jp/research/rrdct/
+//////////////////////////////////////////////////////////////////////////////////////////////
 #include "RedundantDXTDenoise.h"
 
 using namespace std;
@@ -17,7 +25,7 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 {
 	namedWindow(wname);
 
-	int sw = 0; createTrackbar("sw", wname, &sw, 4);
+	int sw = 0; createTrackbar("sw", wname, &sw, 5);
 	int blksize = 3; createTrackbar("bsize2^n", wname, &blksize, 6);
 	int snoise = 20; createTrackbar("noise", wname, &snoise, 100);
 	int thresh = 200; createTrackbar("thresh", wname, &thresh, 2000);
@@ -69,6 +77,10 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 				cout << "cv::xphoto::dctDenoising is not compiled. Please define OPENCV_DCTDENOISE "<<endl;
 #endif
 			}
+			else if (sw == 5)
+			{
+				noise.copyTo(dest);
+			}
 
 			if (key == 'n') isNoiseUpdate = (isNoiseUpdate) ? false: true;
 			if (key == 'h' || key == '?')
@@ -80,6 +92,7 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 				cout << "sw==2: parallel dct denoising " << endl;
 				cout << "sw==3: non-local means denoising " << endl;
 				cout << "sw==4: OpenCV implementation of dct denosing " << endl;
+				cout << "sw==5: noisy image" << endl;
 			}
 		}
 		cout << YPSNR(src, dest) << " dB" << endl;
