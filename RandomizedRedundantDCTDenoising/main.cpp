@@ -140,6 +140,8 @@ int main(int argc, const char *argv[])
 	{
 		//call gui demo
 		guiDenoise(src, dest);
+		imwrite(parser.get<string>(1), dest);
+		return 0;
 	}
 	else
 	{
