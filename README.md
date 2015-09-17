@@ -4,8 +4,8 @@ Project Page
 ------------
 http://fukushima.web.nitech.ac.jp/research/rrdct/
 
-Abstract
-------
+Discription
+-----------
 The code demonstrates the paper [1].
 
 In this paper, the DCT-based denoising [2] is accelerated by using a randomized algorithm.
@@ -20,10 +20,29 @@ The code is tested on OpenCV 3.0 or later and Visual Studio 2013:
 
 Optionally, we can use DHT (discrete Walsh–Hadamard transform) for fast computation instead of using DCT.
 
-Download binary for Windows
----------------------------
+Result
+------
+![input image](noise20.jpg "Input noisy image")  
+Input noisy image  
+
+![smooth image](denoise.jpg "denoised image")  
+denoised image
+Computational time is 13.5 ms for the processing.
+
+Download binary and Usage
+-------------------------
 https://github.com/norishigefukushima/RandomizedRedundantDCTDenoising/releases
 
+Usage:
+Denosing an image
+* rrdct.exe kodim07s20.png out.png 20
+* rrdct.exe -b=DCT -bs=16 -s=l kodim07s20.png out.png 20
+GUI test mode
+* rrdct.exe -g kodim07.png out.png
+* key swich: 'n' switch for updating noise or not.
+
+Help
+* rrdct.exe -h
 
 Reference
 ---------------------------
