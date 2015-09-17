@@ -46,9 +46,12 @@ http://www.ipol.im/pub/art/2011/ys-dct/
 
 Result
 ------
+* Computational time is 13.5 ms for 768 x 512 color image.
+* d=3, bs=8 b=DCT
+
 ![input image](noise20.jpg "Input noisy image")  
 Input noisy image  
 
 ![smooth image](denoise.jpg "denoised image")  
 denoised image
-Computational time is 13.5 ms for the processing.
+
