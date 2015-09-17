@@ -53,5 +53,5 @@ Result
 Input noisy image  
 
 ![smooth image](denoise.jpg "denoised image")  
-denoised image
+Denoised image
 
