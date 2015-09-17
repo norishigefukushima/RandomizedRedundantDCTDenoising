@@ -28,7 +28,7 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 {
 	namedWindow(wname);
 
-	int sw = 0; createTrackbar("sw", wname, &sw, 5);
+	int sw = 2; createTrackbar("sw", wname, &sw, 5);
 	int blksize = 3; createTrackbar("bsize2^n", wname, &blksize, 6);
 	int snoise = 20; createTrackbar("noise", wname, &snoise, 100);
 	int thresh = 200; createTrackbar("thresh", wname, &thresh, 2000);
@@ -56,19 +56,26 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 			
 			if (sw == 0)
 			{
-				rrdct.generateSamplingMaps(src.size(), block, 1, r, RRDXTDenoise::SAMPLING::LATTICE);
-				rrdct(noise, dest, thresh / 10.f, block);
+				noise.copyTo(dest);
+				
 			}
 			else if (sw == 1)
 			{
-				rrdct.generateSamplingMaps(src.size(), block, 1, r, RRDXTDenoise::SAMPLING::LATTICE);
-				rrdct(noise, dest, thresh / 10.f, block, RRDXTDenoise::BASIS::DHT);
+				dctDenoise(noise, dest, thresh / 10.f, block);
+				
 			}
 			else if (sw == 2)
 			{
-				 dctDenoise(noise, dest, thresh / 10.f, block);
+				rrdct.generateSamplingMaps(src.size(), block, 1, r, RRDXTDenoise::SAMPLING::LATTICE);
+				rrdct(noise, dest, thresh / 10.f, block);
 			}
 			else if (sw == 3)
+			{
+				rrdct.generateSamplingMaps(src.size(), block, 1, r, RRDXTDenoise::SAMPLING::LATTICE);
+				rrdct(noise, dest, thresh / 10.f, block, RRDXTDenoise::BASIS::DHT);
+
+			}
+			else if (sw == 4)
 			{
 #ifdef OPENCV_DCTDENOISE_AND_NLM
 				fastNlMeansDenoisingColored(noise, dest, h / 10.f, h_c / 10.f, 3, 2 * radius + 1);
@@ -76,30 +83,27 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 				cout << "cv::fastNlMeansDenoisingColored is not compiled. Please define OPENCV_DCTDENOISE_AND_NLM " << endl;
 #endif
 			}
-			else if (sw == 4)
+			else if (sw == 5)
 			{
 #ifdef OPENCV_DCTDENOISE_AND_NLM
 				cv::xphoto::dctDenoising(noise, dest, thresh, bsize);
 #else
-				cout << "cv::xphoto::dctDenoising is not compiled. Please define OPENCV_DCTDENOISE_AND_NLM "<<endl;
+				cout << "cv::xphoto::dctDenoising is not compiled. Please define OPENCV_DCTDENOISE_AND_NLM " << endl;
 #endif
-			}
-			else if (sw == 5)
-			{
-				noise.copyTo(dest);
 			}
 
 			if (key == 'n') isNoiseUpdate = (isNoiseUpdate) ? false: true;
+
 			if (key == 'h' || key == '?')
 			{
 				cout << " 'n' swichs flag for updating noise image or not " << endl;
-
-				cout << "sw==0: rr-dct denoising " << endl;
-				cout << "sw==1: rr-dht denoising " << endl;
-				cout << "sw==2: parallel dct denoising " << endl;
-				cout << "sw==3: non-local means denoising " << endl;
-				cout << "sw==4: OpenCV implementation of dct denosing " << endl;
-				cout << "sw==5: noisy image" << endl;
+				cout << "sw==0: noisy image" << endl;
+				cout << "sw==1: parallel dct denoising " << endl;
+				cout << "sw==2: rr-dct denoising " << endl;
+				cout << "sw==3: rr-dht denoising " << endl;
+				cout << "sw==4: non-local means denoising " << endl;
+				cout << "sw==5: OpenCV implementation of dct denosing " << endl;
+				key = waitKey(1000);
 			}
 		}
 		cout << YPSNR(src, dest) << " dB" << endl;
@@ -112,21 +116,20 @@ int main(int argc, const char *argv[])
 {
 	{
 		//for debug
-	//	Mat src = imread("img/kodim07.png"); Mat dest; guiDenoise(src, dest);
+		//Mat src = imread("img/kodim07.png"); Mat dest; guiDenoise(src, dest); return 0;
 	}
 
 	const string keys =
 	{
 		"{help h|   | print this message}"
-		"{@src  |   |src image}"
-		"{@dest |   |dest image}"
-		"{@noise|   |noise stddev}"
+		"{@src(image)  |   |src image}"
+		"{@dest(image) |   |dest image}"
+		"{@noise(float)|   |noise stddev}"
 		"{b     |DCT|basis DCT or DHT}"
-		"{bw    |8  |block width      }"
-		"{bh    |0  |block height. if(bh==0) bh=bw}"
+		"{bs    |8  |block width      }"
 		"{g gui |   |call interactive denoising}"
 		"{d     |0  |minimum d for sampling. if(d==0) auto}"
-		"{s     |lattice  |sampling type (lattice, poisson, f) or (lattice, p, f}"
+		"{s     |lattice  |sampling type (lattice, poisson, full) or (l, p, f)}"
 	};
 	cv::CommandLineParser parser(argc, argv, keys);
 	if (argc == 1)
@@ -154,12 +157,10 @@ int main(int argc, const char *argv[])
 	{
 		string basis = parser.get<string>("b");
 		string sampling = parser.get<string>("s");
-		int bw = parser.get<int>("bw");
-		int bh = parser.get<int>("bh");
-		bh = (bh == 0) ? bw : bh;
-		Size psize = Size(bw, bh);
+		int bs = parser.get<int>("bs");
+		Size psize = Size(bs, bs);
 		int d = parser.get<int>("d");
-		if (d == 0) d = min(bw, bh) / 3;
+		if (d == 0) d = bs / 3;
 		float sigma = parser.get<float>(2);
 
 		RedundantDXTDenoise::BASIS dxtbasis;
