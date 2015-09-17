@@ -20,15 +20,6 @@ The code is tested on OpenCV 3.0 or later and Visual Studio 2013:
 
 Optionally, we can use DHT (discrete Walsh–Hadamard transform) for fast computation instead of using DCT.
 
-Result
-------
-![input image](noise20.jpg "Input noisy image")  
-Input noisy image  
-
-![smooth image](denoise.jpg "denoised image")  
-denoised image
-Computational time is 13.5 ms for the processing.
-
 Download binary and Usage
 -------------------------
 https://github.com/norishigefukushima/RandomizedRedundantDCTDenoising/releases
@@ -51,3 +42,13 @@ Reference
 http://www.ipol.im/pub/art/2011/ys-dct/
 * [3] C. Loeffler, A. Ligtenberg, and G. S. Moschytz, "Practical fast 1-D DCT algorithms with 11 multiplications," Proc. Int'l. Conf. on Acoustics, Speech, and Signal Processing (ICASSP), pp. 988-991, 1989.
 * [4] G. Plonka and M. Tasche. "Fast and numerically stable algorithms for discrete cosine transforms." Linear algebra and its applications, 394, pp. 309 - 345, 2005.
+
+
+Result
+------
+![input image](noise20.jpg "Input noisy image")  
+Input noisy image  
+
+![smooth image](denoise.jpg "denoised image")  
+denoised image
+Computational time is 13.5 ms for the processing.
