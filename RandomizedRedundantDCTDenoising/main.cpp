@@ -11,12 +11,15 @@
 using namespace std;
 using namespace cv;
 
-#define OPENCV_DCTDENOISE 
-#ifdef OPENCV_DCTDENOISE
+#define OPENCV_DCTDENOISE_AND_NLM
+#ifdef OPENCV_DCTDENOISE_AND_NLM
 #include <opencv2/xphoto.hpp>
+#include <opencv2/photo.hpp>
 #ifdef _DEBUG
+#pragma comment(lib, "opencv_photo"CV_VERSION_NUMBER"d.lib")
 #pragma comment(lib, "opencv_xphoto"CV_VERSION_NUMBER"d.lib")
 #else
+#pragma comment(lib, "opencv_photo"CV_VERSION_NUMBER".lib")
 #pragma comment(lib, "opencv_xphoto"CV_VERSION_NUMBER".lib")
 #endif
 #endif
@@ -67,14 +70,18 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 			}
 			else if (sw == 3)
 			{
+#ifdef OPENCV_DCTDENOISE_AND_NLM
 				fastNlMeansDenoisingColored(noise, dest, h / 10.f, h_c / 10.f, 3, 2 * radius + 1);
+#else
+				cout << "cv::fastNlMeansDenoisingColored is not compiled. Please define OPENCV_DCTDENOISE_AND_NLM " << endl;
+#endif
 			}
 			else if (sw == 4)
 			{
-#ifdef OPENCV_DCTDENOISE
+#ifdef OPENCV_DCTDENOISE_AND_NLM
 				cv::xphoto::dctDenoising(noise, dest, thresh, bsize);
 #else
-				cout << "cv::xphoto::dctDenoising is not compiled. Please define OPENCV_DCTDENOISE "<<endl;
+				cout << "cv::xphoto::dctDenoising is not compiled. Please define OPENCV_DCTDENOISE_AND_NLM "<<endl;
 #endif
 			}
 			else if (sw == 5)
@@ -105,7 +112,7 @@ int main(int argc, const char *argv[])
 {
 	{
 		//for debug
-		//Mat src_ = imread("img/kodim07.png"); Mat src, dest; resize(src_, src, Size(1024, 1024)); guiDenoise(src, dest);
+	//	Mat src = imread("img/kodim07.png"); Mat dest; guiDenoise(src, dest);
 	}
 
 	const string keys =

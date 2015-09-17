@@ -6,10 +6,10 @@ double YPSNR(InputArray src1, InputArray src2)
 {
 	Mat g1, g2;
 	if (src1.channels() == 1) g1 = src1.getMat();
-	else cvtColor(src1, g1, COLOR_BGR2GRAY);
+	else cvtColor(src1, g1, COLOR_BGR2GRAY); 
 	if (src2.channels() == 1) g2 = src2.getMat();
 	else cvtColor(src2, g2, COLOR_BGR2GRAY);
-
+	
 	return PSNR(g1, g2);
 }
 
