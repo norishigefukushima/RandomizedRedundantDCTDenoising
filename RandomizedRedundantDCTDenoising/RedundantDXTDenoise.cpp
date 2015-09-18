@@ -2127,3 +2127,4 @@ float RedundantDXTDenoise::getThreshold(float sigmaNoise)
 {
 	return 2.7f * sigmaNoise;
 }
+

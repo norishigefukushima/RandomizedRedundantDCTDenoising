@@ -910,7 +910,7 @@ static void fdct88_sse_GT(const float *src, float *dst)
 		__m128 b = _mm_mul_ps(c0353, _mm_add_ps(mx0c, mx0d));
 		__m128 c = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(0.461939766255643f), mx0a), _mm_mul_ps(_mm_set1_ps(0.191341716182545f), mx0b));
 		__m128 d = _mm_mul_ps(c0707, _mm_sub_ps(mx10, mx11));
-
+		_MM_TRANSPOSE4_PS(a, b, c, d);
 		_mm_store_ps(dst + 0, a);
 		_mm_store_ps(dst + 8, b);
 		_mm_store_ps(dst + 16, c);
@@ -1029,6 +1029,7 @@ static void fDCT8x8GT_threshold_keep00(const float *src, float *dst, float thres
 	_MM_TRANSPOSE4_PS(md10, md11, md12, md13);
 
 	src += 4;
+
 	ms0 = _mm_load_ps(src);
 	ms1 = _mm_load_ps(src + 8);
 	ms2 = _mm_load_ps(src + 16);
@@ -1071,6 +1072,7 @@ static void fDCT8x8GT_threshold_keep00(const float *src, float *dst, float thres
 	_MM_TRANSPOSE4_PS(md14, md15, md16, md17);
 
 	src -= 4;
+
 	ms0 = md00;
 	ms1 = md01;
 	ms2 = md02;
@@ -1121,28 +1123,27 @@ static void fDCT8x8GT_threshold_keep00(const float *src, float *dst, float thres
 	v = _mm_blendv_ps(zeros, v, msk);
 	_mm_store_ps(dst + 24, v);
 
-	dst += 4;
-
 	v = _mm_mul_ps(c0353, _mm_sub_ps(mx08, mx09));
 	msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
 	v = _mm_blendv_ps(zeros, v, msk);
-	_mm_store_ps(dst, v);
+	_mm_store_ps(dst + 32, v);
 
 	v = _mm_mul_ps(c0707, _mm_add_ps(mx10, mx11));
 	msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
 	v = _mm_blendv_ps(zeros, v, msk);
-	_mm_store_ps(dst + 8, v);
+	_mm_store_ps(dst + 40, v);
 
 	v = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(0.191341716182545f), mx0a), _mm_mul_ps(_mm_set1_ps(-0.461939766255643f), mx0b));
 	msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
 	v = _mm_blendv_ps(zeros, v, msk);
-	_mm_store_ps(dst + 16, v);
+	_mm_store_ps(dst + 48, v);
 
 	v = _mm_mul_ps(c0353, _mm_add_ps(mx0e, mx0f));
 	msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
 	v = _mm_blendv_ps(zeros, v, msk);
-	_mm_store_ps(dst + 24, v);
+	_mm_store_ps(dst + 56, v);
 
+	dst += 4;
 	ms0 = md10;
 	ms1 = md11;
 	ms2 = md12;
@@ -1175,22 +1176,22 @@ static void fDCT8x8GT_threshold_keep00(const float *src, float *dst, float thres
 	v = _mm_mul_ps(c0353, _mm_add_ps(mx08, mx09));
 	msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
 	v = _mm_blendv_ps(zeros, v, msk);
-	_mm_store_ps(dst+28, v);
+	_mm_store_ps(dst, v);
 
 	v = _mm_mul_ps(c0353, _mm_add_ps(mx0c, mx0d));
 	msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
 	v = _mm_blendv_ps(zeros, v, msk);
-	_mm_store_ps(dst + 36, v);
+	_mm_store_ps(dst + 8, v);
 
 	v = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(0.461939766255643f), mx0a), _mm_mul_ps(_mm_set1_ps(0.191341716182545f), mx0b));
 	msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
 	v = _mm_blendv_ps(zeros, v, msk);
-	_mm_store_ps(dst + 44, v);
+	_mm_store_ps(dst + 16, v);
 
 	v = _mm_mul_ps(c0707, _mm_sub_ps(mx10, mx11));
 	msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
 	v = _mm_blendv_ps(zeros, v, msk);
-	_mm_store_ps(dst + 52, v);
+	_mm_store_ps(dst + 24, v);
 
 	v = _mm_mul_ps(c0353, _mm_sub_ps(mx08, mx09));
 	msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
@@ -1725,10 +1726,10 @@ static void fDCT2D8x4_32f(const float* x, float* y)
 void fDCT8x8GT(const float* s, float* d)
 {
 	fdct88_sse_GT(s, d);
-	/*fdct81d_sse_GT(s, d);
-	transpose8x8(d);
-	fdct81d_sse_GT(d, d);
-	transpose8x8(d);*/
+	//fdct81d_sse_GT(s, d);
+	//transpose8x8(d);
+	//fdct81d_sse_GT(d, d);
+	//transpose8x8(d);
 }
 
 void iDCT8x8GT(const float* s, float* d)
@@ -2062,17 +2063,23 @@ static void fDCT8x8_32f_and_threshold(const float* s, float* d, float threshold,
 void fDCT8x8_threshold_keep00_iDCT8x8(float* s, float threshold)
 {
 	fDCT8x8GT_threshold_keep00(s, s, threshold);
-
+	//fDCT8x8(s, s);
+	//fDCT8x8GT(s, s);
+	//transpose8x8(s);
+	//for (int i = 1; i < 64; i++) if (abs(s[i]) < threshold) s[i] = 0.f;
+	
 	//fDCT2D8x4_32f(s, s);
 	//fDCT2D8x4_32f(s + 4, s + 4);
 	//transpose8x8(s);
 	//fDCT2D8x4_and_threshold_keep00_32f(s, s, threshold);
-	////fDCT2D8x4_and_threshold_32f(s, s, threshold);
+	//fDCT2D8x4_and_threshold_32f(s, s, threshold);
 	//fDCT2D8x4_and_threshold_32f(s + 4, s + 4, threshold);
+	
 	//ommiting transform
 	////transpose8x8(s);
 	////transpose8x8(s);
-
+	//iDCT8x8GT(s, s);
+	
 //	idct81d_sse_GT(s, s);
 	iDCT2D8x4_32f(s, s);
 	iDCT2D8x4_32f(s + 4, s + 4);
@@ -2080,7 +2087,7 @@ void fDCT8x8_threshold_keep00_iDCT8x8(float* s, float threshold)
 //	idct81d_sse_GT(s, s);
 	iDCT2D8x4_32f(s, s);
 	iDCT2D8x4_32f(s + 4, s + 4);
-
+	
 	return;
 }
 
@@ -2089,11 +2096,8 @@ int fDCT8x8__threshold_keep00_iDCT8x8_nonzero(float* s, float threshold)
 	fDCT2D8x4_32f(s, s);
 	fDCT2D8x4_32f(s + 4, s + 4);
 	transpose8x8(s);
-#ifdef _KEEP_00_COEF_
 	fDCT2D8x4_and_threshold_keep00_32f(s, s, threshold);
-#else
-	fDCT2D8x4_and_threshold_32f(s, s, threshold);
-#endif
+	//fDCT2D8x4_and_threshold_32f(s, s, threshold);
 	fDCT2D8x4_and_threshold_32f(s + 4, s + 4, threshold);
 	int ret = getNonzero(s, 64);
 	//ommiting transform

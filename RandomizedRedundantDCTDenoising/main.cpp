@@ -116,7 +116,7 @@ int main(int argc, const char *argv[])
 {
 	{
 		//for debug
-		//Mat src = imread("img/kodim07.png"); Mat dest; guiDenoise(src, dest); return 0;
+	//	Mat src = imread("img/kodim13.png"); Mat dest; guiDenoise(src, dest); return 0;
 	}
 
 	const string keys =
