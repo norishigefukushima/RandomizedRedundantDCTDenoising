@@ -20,7 +20,7 @@ The code is tested on OpenCV 3.0 or later and Visual Studio 2013:
 
 Optionally, we can use DHT (discrete Walsh–Hadamard transform) for fast computation instead of using DCT.
 
-Download binary and Usage
+Download Binary and Usage
 -------------------------
 https://github.com/norishigefukushima/RandomizedRedundantDCTDenoising/releases
 
@@ -28,7 +28,8 @@ Usage:
 Denosing an image
 * rrdct.exe kodim07s20.png out.png 20
 * rrdct.exe -b=DCT -bs=16 -s=l kodim07s20.png out.png 20
-GUI test mode
+
+GUI test mode (please input noise free images for PSNR calculation)
 * rrdct.exe -g kodim07.png out.png
 * key swich: 'n' switch for updating noise or not.
 
@@ -36,7 +37,7 @@ Help
 * rrdct.exe -h
 
 Reference
----------------------------
+---------
 * [1] S. Fujita, N. Fukushima, M. Kimura, and Y. Ishibashi, "Randomized redundant DCT: Efficient denoising by using random subsampling of DCT patches," Proc. Siggraph Asia, Technical Brief, Nov. 2015.
 * [2] G. Yu and G. Sapiro, "DCT image denoising: a simple and effective image denoising algorithm," Image Processing On Line, 1 (2011). http://dx.doi.org/10.5201/ipol.2011.ys-dct
 http://www.ipol.im/pub/art/2011/ys-dct/
@@ -46,8 +47,8 @@ http://www.ipol.im/pub/art/2011/ys-dct/
 
 Result
 ------
-* Computational time is 13.5 ms for 768 x 512 color image.
-* d=3, bs=8 b=DCT
+* Computational time is 13.5 ms for a 768 x 512 color image.
+* Option: d=3, bs=8, b=DCT
 
 ![input image](noise20.jpg "Input noisy image")  
 Input noisy image  
