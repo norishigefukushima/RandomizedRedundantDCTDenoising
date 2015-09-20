@@ -313,84 +313,6 @@ CalcTime::~CalcTime()
 	}
 }
 
-
-void cvtColorBGR2PLANE_8u(const Mat& src, Mat& dest)
-{
-	dest.create(Size(src.cols, src.rows * 3), CV_8U);
-
-	const int size = src.size().area();
-	const int ssesize = 3 * size - ((48 - (3 * size) % 48) % 48);
-	const int ssecount = ssesize / 48;
-	const uchar* s = src.ptr<uchar>(0);
-	uchar* B = dest.ptr<uchar>(0);//line by line interleave
-	uchar* G = dest.ptr<uchar>(src.rows);
-	uchar* R = dest.ptr<uchar>(2 * src.rows);
-
-	//BGR BGR BGR BGR BGR B	
-	//GR BGR BGR BGR BGR BG
-	//R BGR BGR BGR BGR BGR
-	//BBBBBBGGGGGRRRRR shuffle
-	const __m128i mask1 = _mm_setr_epi8(0, 3, 6, 9, 12, 15, 1, 4, 7, 10, 13, 2, 5, 8, 11, 14);
-	//GGGGGBBBBBBRRRRR shuffle
-	const __m128i smask1 = _mm_setr_epi8(6, 7, 8, 9, 10, 0, 1, 2, 3, 4, 5, 11, 12, 13, 14, 15);
-	const __m128i ssmask1 = _mm_setr_epi8(11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-
-	//GGGGGGBBBBBRRRRR shuffle
-	const __m128i mask2 = _mm_setr_epi8(0, 3, 6, 9, 12, 15, 2, 5, 8, 11, 14, 1, 4, 7, 10, 13);
-	//const __m128i smask2 = _mm_setr_epi8(6,7,8,9,10,0,1,2,3,4,5,11,12,13,14,15);
-	const __m128i ssmask2 = _mm_setr_epi8(0, 1, 2, 3, 4, 11, 12, 13, 14, 15, 5, 6, 7, 8, 9, 10);
-
-	//RRRRRRGGGGGBBBBB shuffle -> same mask2
-	//__m128i mask3 = _mm_setr_epi8(0,3,6,9,12,15, 2,5,8,11,14,1,4,7,10,13);
-
-	//const __m128i smask3 = _mm_setr_epi8(6,7,8,9,10,0,1,2,3,4,5,6,7,8,9,10);
-	//const __m128i ssmask3 = _mm_setr_epi8(11,12,13,14,15,0,1,2,3,4,5,6,7,8,9,10);
-
-	const __m128i bmask1 = _mm_setr_epi8
-		(255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-
-	const __m128i bmask2 = _mm_setr_epi8
-		(255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0);
-
-	const __m128i bmask3 = _mm_setr_epi8
-		(255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-
-	const __m128i bmask4 = _mm_setr_epi8
-		(255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0);
-
-	__m128i a, b, c;
-
-	for (int i = 0; i < ssecount; i++)
-	{
-		a = _mm_shuffle_epi8(_mm_load_si128((__m128i*)(s)), mask1);
-		b = _mm_shuffle_epi8(_mm_load_si128((__m128i*)(s + 16)), mask2);
-		c = _mm_shuffle_epi8(_mm_load_si128((__m128i*)(s + 32)), mask2);
-		_mm_storeu_si128((__m128i*)(B), _mm_blendv_epi8(c, _mm_blendv_epi8(b, a, bmask1), bmask2));
-		a = _mm_shuffle_epi8(a, smask1);
-		b = _mm_shuffle_epi8(b, smask1);
-		c = _mm_shuffle_epi8(c, ssmask1);
-		_mm_storeu_si128((__m128i*)(G), _mm_blendv_epi8(c, _mm_blendv_epi8(b, a, bmask3), bmask2));
-
-		a = _mm_shuffle_epi8(a, ssmask1);
-		c = _mm_shuffle_epi8(c, ssmask1);
-		b = _mm_shuffle_epi8(b, ssmask2);
-
-		_mm_storeu_si128((__m128i*)(R), _mm_blendv_epi8(c, _mm_blendv_epi8(b, a, bmask3), bmask4));
-
-		s += 48;
-		R += 16;
-		G += 16;
-		B += 16;
-	}
-	for (int i = ssesize; i < 3 * size; i += 3)
-	{
-		B[0] = s[0];
-		G[0] = s[1];
-		R[0] = s[2];
-		s += 3, R++, G++, B++;
-	}
-}
-
 class ColorPLANEDCT32BGR_32fInvorker : public cv::ParallelLoopBody
 {
 public:
@@ -460,7 +382,6 @@ public:
 		}
 	}
 };
-
 
 class ColorBGR2PLANEDCT3_32fInvorker : public cv::ParallelLoopBody
 {
@@ -610,6 +531,59 @@ void cvtColorBGR2PLANE_32f(const Mat& src, Mat& dest)
 	}
 }
 
+void cvtColorBGR2PLANE_8u(const Mat& src, Mat& dest)
+{
+	dest.create(Size(src.cols, src.rows * 3), CV_8U);
+
+	const int size = src.size().area();
+	const int ssesize = 3 * size - ((48 - (3 * size) % 48) % 48);
+	const int ssecount = ssesize / 48;
+	const uchar* s = src.ptr<uchar>(0);
+	uchar* B = dest.ptr<uchar>(0);//line by line interleave
+	uchar* G = dest.ptr<uchar>(src.rows);
+	uchar* R = dest.ptr<uchar>(2 * src.rows);
+
+	//BGR BGR BGR BGR BGR B	-> GGGGG RRRRR BBBBBB
+	//GR BGR BGR BGR BGR BG -> GGGGGG RRRRR BBBBB
+	//R BGR BGR BGR BGR BGR -> BBBBB GGGGG RRRRR
+
+	const __m128i mask0 = _mm_setr_epi8(1, 4, 7, 10, 13, 2, 5, 8, 11, 14, 0, 3, 6, 9, 12, 15);
+	const __m128i mask1 = _mm_setr_epi8(0, 3, 6, 9, 12, 15, 1, 4, 7, 10, 13, 2, 5, 8, 11, 14);
+
+	__m128i a, b, c, d, e;
+
+	for (int i = 0; i < ssecount; i++)
+	{
+		a = _mm_shuffle_epi8(_mm_load_si128((__m128i*)(s + 0)), mask0);
+		b = _mm_shuffle_epi8(_mm_load_si128((__m128i*)(s + 16)), mask1);
+		c = _mm_shuffle_epi8(_mm_load_si128((__m128i*)(s + 32)), mask0);
+
+		d = _mm_alignr_epi8(c, b, 11);
+		e = _mm_alignr_epi8(d, a, 10);
+		_mm_storeu_si128((__m128i*)(B), e);
+
+		d = _mm_alignr_epi8(_mm_srli_si128(c, 5), _mm_slli_si128(b, 10), 10);
+		e = _mm_alignr_epi8(d, _mm_slli_si128(a, 11), 11);
+		_mm_storeu_si128((__m128i*)(G), e);
+
+		d = _mm_alignr_epi8(_mm_srli_si128(c, 10), _mm_slli_si128(b, 5), 11);
+		e = _mm_alignr_epi8(d, _mm_slli_si128(a, 6), 11);
+		_mm_storeu_si128((__m128i*)(R), e);
+
+		s += 48;
+		R += 16;
+		G += 16;
+		B += 16;
+	}
+	for (int i = ssesize; i < 3 * size; i += 3)
+	{
+		B[0] = s[0];
+		G[0] = s[1];
+		R[0] = s[2];
+		s += 3, R++, G++, B++;
+	}
+}
+
 template <class T>
 void cvtColorBGR2PLANE_(const Mat& src, Mat& dest, int depth)
 {
@@ -631,7 +605,6 @@ void cvtColorBGR2PLANE(const Mat& src, Mat& dest)
 		//cvtColorBGR2PLANE_<uchar>(src, dest, CV_8U);
 		//Mat d2;
 		cvtColorBGR2PLANE_8u(src, dest);
-
 	}
 	else if (src.depth() == CV_16U)
 	{
