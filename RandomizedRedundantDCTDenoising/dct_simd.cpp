@@ -29,8 +29,10 @@ void fDCT16x16_threshold_keep00_iDCT16x16(const float* src, float* dest, float t
 void iDCT16x16(const float* src, float* dest);
 void fDCT16x16(const float* src, float* dest);
 
-static void fdct161d_base(const float *src, float *dst)
+static void fdct161d_base(const float *s, float *d)
 {
+	float* src = (float*)s;
+	float* dst = d;
 	for (int i = 0; i < 16; i++)
 	{
 		const float mx00 = src[0] + src[15];
@@ -108,7 +110,6 @@ static void fdct161d_base(const float *src, float *dst)
 		dst[13] = 0.707106781186547f * (mx30 + mx36);
 		dst[14] = 0.25f * (mx1e + mx1f);
 		dst[15] = 0.25f * (mx31 + mx32);
-
 		dst += 16;
 		src += 16;
 	}
@@ -224,7 +225,7 @@ static void fdct161d_sse(const float *s, float *d)
 		src += 4;
 	}
 }
-
+#include <stdio.h>
 static void fdct161d_threshold_keep00_sse(const float *s, float *d, float th)
 {
 	const int __declspec(align(16)) v32f_absmask[] = { 0x7fffffff, 0x7fffffff, 0x7fffffff, 0x7fffffff };
@@ -240,7 +241,7 @@ static void fdct161d_threshold_keep00_sse(const float *s, float *d, float th)
 	const __m128 c0707 = _mm_set1_ps(0.707106781186547f);
 	const __m128 c1414 = _mm_set1_ps(1.4142135623731f);
 
-	for (int i = 0; i < 4; i++)
+	//1 step
 	{
 		__m128 ms0 = _mm_load_ps(src);
 		__m128 ms1 = _mm_load_ps(src + 16);
@@ -330,6 +331,168 @@ static void fdct161d_threshold_keep00_sse(const float *s, float *d, float th)
 		v = _mm_blendv_ps(zeros, v, msk);
 		_mm_store_ps(dst + 16, v);
 
+		v = _mm_mul_ps(c0250, _mm_add_ps(mx1c, mx1d));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 32, v);
+
+		v = _mm_mul_ps(c0707, _mm_sub_ps(mx2f, mx37));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 48, v);
+
+		v = _mm_add_ps(_mm_mul_ps(c0326, mx1a), _mm_mul_ps(c0135, mx1b));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 64, v);
+
+		v = _mm_mul_ps(c0707, _mm_add_ps(mx2f, mx37));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 80, v);
+
+		v = _mm_mul_ps(c0707, _mm_sub_ps(mx20, mx21));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 96, v);
+
+		v = _mm_mul_ps(c0707, _mm_add_ps(mx2e, mx35));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 112, v);
+
+		v = _mm_mul_ps(c0250, _mm_sub_ps(mx18, mx19));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 128, v);
+
+		v = _mm_mul_ps(c0707, _mm_sub_ps(mx2e, mx35));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 144, v);
+
+		v = _mm_mul_ps(c0707, _mm_add_ps(mx20, mx21));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 160, v);
+
+		v = _mm_mul_ps(c0707, _mm_sub_ps(mx30, mx36));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 176, v);
+
+		v = _mm_sub_ps(_mm_mul_ps(c0135, mx1a), _mm_mul_ps(c0326, mx1b));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 192, v);
+
+		v = _mm_mul_ps(c0707, _mm_add_ps(mx30, mx36));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 208, v);
+
+		v = _mm_mul_ps(c0250, _mm_add_ps(mx1e, mx1f));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 224, v);
+
+		v = _mm_mul_ps(c0250, _mm_add_ps(mx31, mx32));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 240, v);
+
+		dst += 4;
+		src += 4;
+	}
+	for (int i = 1; i < 4; i++)
+	{
+		__m128 ms0 = _mm_load_ps(src);
+		__m128 ms1 = _mm_load_ps(src + 16);
+		__m128 ms2 = _mm_load_ps(src + 32);
+		__m128 ms3 = _mm_load_ps(src + 48);
+		__m128 ms4 = _mm_load_ps(src + 64);
+		__m128 ms5 = _mm_load_ps(src + 80);
+		__m128 ms6 = _mm_load_ps(src + 96);
+		__m128 ms7 = _mm_load_ps(src + 112);
+		__m128 ms8 = _mm_load_ps(src + 128);
+		__m128 ms9 = _mm_load_ps(src + 144);
+		__m128 ms10 = _mm_load_ps(src + 160);
+		__m128 ms11 = _mm_load_ps(src + 176);
+		__m128 ms12 = _mm_load_ps(src + 192);
+		__m128 ms13 = _mm_load_ps(src + 208);
+		__m128 ms14 = _mm_load_ps(src + 224);
+		__m128 ms15 = _mm_load_ps(src + 240);
+
+		__m128 mx00 = _mm_add_ps(ms0, ms15);
+		__m128 mx01 = _mm_add_ps(ms1, ms14);
+		__m128 mx02 = _mm_add_ps(ms2, ms13);
+		__m128 mx03 = _mm_add_ps(ms3, ms12);
+		__m128 mx04 = _mm_add_ps(ms4, ms11);
+		__m128 mx05 = _mm_add_ps(ms5, ms10);
+		__m128 mx06 = _mm_add_ps(ms6, ms9);
+		__m128 mx07 = _mm_add_ps(ms7, ms8);
+		__m128 mx08 = _mm_sub_ps(ms0, ms15);
+		__m128 mx09 = _mm_sub_ps(ms1, ms14);
+		__m128 mx0a = _mm_sub_ps(ms2, ms13);
+		__m128 mx0b = _mm_sub_ps(ms3, ms12);
+		__m128 mx0c = _mm_sub_ps(ms4, ms11);
+		__m128 mx0d = _mm_sub_ps(ms5, ms10);
+		__m128 mx0e = _mm_sub_ps(ms6, ms9);
+		__m128 mx0f = _mm_sub_ps(ms7, ms8);
+
+		__m128 mx10 = _mm_add_ps(mx00, mx07);
+		__m128 mx11 = _mm_add_ps(mx01, mx06);
+		__m128 mx12 = _mm_add_ps(mx02, mx05);
+		__m128 mx13 = _mm_add_ps(mx03, mx04);
+		__m128 mx14 = _mm_sub_ps(mx00, mx07);
+		__m128 mx15 = _mm_sub_ps(mx01, mx06);
+		__m128 mx16 = _mm_sub_ps(mx02, mx05);
+		__m128 mx17 = _mm_sub_ps(mx03, mx04);
+		__m128 mx18 = _mm_add_ps(mx10, mx13);
+		__m128 mx19 = _mm_add_ps(mx11, mx12);
+		__m128 mx1a = _mm_sub_ps(mx10, mx13);
+		__m128 mx1b = _mm_sub_ps(mx11, mx12);
+
+		__m128 mx1c = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(1.38703984532215f), mx14), _mm_mul_ps(_mm_set1_ps(0.275899379282943f), mx17));
+		__m128 mx1d = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(1.17587560241936f), mx15), _mm_mul_ps(_mm_set1_ps(0.785694958387102f), mx16));
+		__m128 mx1e = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(-0.785694958387102f), mx15), _mm_mul_ps(_mm_set1_ps(1.17587560241936f), mx16));
+		__m128 mx1f = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(0.275899379282943f), mx14), _mm_mul_ps(_mm_set1_ps(-1.38703984532215f), mx17));
+		__m128 mx20 = _mm_mul_ps(c0250, _mm_sub_ps(mx1c, mx1d));
+		__m128 mx21 = _mm_mul_ps(c0250, _mm_sub_ps(mx1e, mx1f));
+		__m128 mx22 = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(1.40740373752638f), mx08), _mm_mul_ps(_mm_set1_ps(0.138617169199091f), mx0f));
+		__m128 mx23 = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(1.35331800117435f), mx09), _mm_mul_ps(_mm_set1_ps(0.410524527522357f), mx0e));
+		__m128 mx24 = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(1.24722501298667f), mx0a), _mm_mul_ps(_mm_set1_ps(0.666655658477747f), mx0d));
+		__m128 mx25 = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(1.09320186700176f), mx0b), _mm_mul_ps(_mm_set1_ps(0.897167586342636f), mx0c));
+		__m128 mx26 = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(-0.897167586342636f), mx0b), _mm_mul_ps(_mm_set1_ps(1.09320186700176f), mx0c));
+		__m128 mx27 = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(0.666655658477747f), mx0a), _mm_mul_ps(_mm_set1_ps(-1.24722501298667f), mx0d));
+		__m128 mx28 = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(-0.410524527522357f), mx09), _mm_mul_ps(_mm_set1_ps(1.35331800117435f), mx0e));
+		__m128 mx29 = _mm_add_ps(_mm_mul_ps(_mm_set1_ps(0.138617169199091f), mx08), _mm_mul_ps(_mm_set1_ps(-1.40740373752638f), mx0f));
+		__m128 mx2a = _mm_add_ps(mx22, mx25);
+		__m128 mx2b = _mm_add_ps(mx23, mx24);
+		__m128 mx2c = _mm_sub_ps(mx22, mx25);
+		__m128 mx2d = _mm_sub_ps(mx23, mx24);
+		__m128 mx2e = _mm_mul_ps(c0250, _mm_sub_ps(mx2a, mx2b));
+		__m128 mx2f = _mm_add_ps(_mm_mul_ps(c0326, mx2c), _mm_mul_ps(c0135, mx2d));
+		__m128 mx30 = _mm_sub_ps(_mm_mul_ps(c0135, mx2c), _mm_mul_ps(c0326, mx2d));
+		__m128 mx31 = _mm_add_ps(mx26, mx29);
+		__m128 mx32 = _mm_add_ps(mx27, mx28);
+		__m128 mx33 = _mm_sub_ps(mx26, mx29);
+		__m128 mx34 = _mm_sub_ps(mx27, mx28);
+		__m128 mx35 = _mm_mul_ps(c0250, _mm_sub_ps(mx31, mx32));
+		__m128 mx36 = _mm_add_ps(_mm_mul_ps(c0326, mx33), _mm_mul_ps(c0135, mx34));
+		__m128 mx37 = _mm_sub_ps(_mm_mul_ps(c0135, mx33), _mm_mul_ps(c0326, mx34));
+
+		// keep 00 coef.
+		__m128 v = _mm_mul_ps(c0250, _mm_add_ps(mx18, mx19));
+		__m128 msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 0, v);
+
+		v = _mm_mul_ps(c0250, _mm_add_ps(mx2a, mx2b));
+		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
+		v = _mm_blendv_ps(zeros, v, msk);
+		_mm_store_ps(dst + 16, v);
+		
 		v = _mm_mul_ps(c0250, _mm_add_ps(mx1c, mx1d));
 		msk = _mm_cmpgt_ps(_mm_and_ps(v, *(const __m128*)v32f_absmask), mth);
 		v = _mm_blendv_ps(zeros, v, msk);
@@ -623,17 +786,18 @@ static void idct161d_sse(const float *s, float *d)
 void fDCT16x16_threshold_keep00_iDCT16x16(const float* src, float* dest, float th)
 {
 	fdct161d_sse(src, dest);
-	//fdct16_1d(src, dest);
 	transpose16x16(dest);
-
-	fdct161d_threshold_keep00_sse(src, dest, th);
-	//fdct16_1d_sse(dest, dest);
-	//fdct16_1d(dest, dest);
-
-	idct161d_sse(src, dest);
-	//idct16_1d(src, dest);
+	fdct161d_threshold_keep00_sse(dest, dest, th);
+	idct161d_sse(dest, dest);
 	transpose16x16(dest);
 	idct161d_sse(dest, dest);
+	
+	//fdct161d_sse(src, dest);
+	//transpose16x16(dest);
+	//fdct161d_sse(dest, dest);
+	//for (int i = 1; i < 256; i++) if (abs(dest[i]) < th) dest[i] = 0.f;
+	//idct_161d_base(dest, dest);
+	//idct161d_base(dest, dest);
 }
 
 void fDCT16x16(const float* src, float* dest)

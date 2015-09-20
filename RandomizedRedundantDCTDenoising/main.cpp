@@ -62,7 +62,6 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 			else if (sw == 1)
 			{
 				dctDenoise(noise, dest, thresh / 10.f, block);
-				
 			}
 			else if (sw == 2)
 			{
@@ -73,10 +72,10 @@ void guiDenoise(Mat& src, Mat& dest, string wname = "denoise")
 			{
 				rrdct.generateSamplingMaps(src.size(), block, 1, r, RRDXTDenoise::SAMPLING::LATTICE);
 				rrdct(noise, dest, thresh / 10.f, block, RRDXTDenoise::BASIS::DHT);
-
 			}
 			else if (sw == 4)
 			{
+
 #ifdef OPENCV_DCTDENOISE_AND_NLM
 				fastNlMeansDenoisingColored(noise, dest, h / 10.f, h_c / 10.f, 3, 2 * radius + 1);
 #else
@@ -116,7 +115,7 @@ int main(int argc, const char *argv[])
 {
 	{
 		//for debug
-	//	Mat src = imread("img/kodim13.png"); Mat dest; guiDenoise(src, dest); return 0;
+		//Mat src = imread("img/kodim13.png"); Mat dest; guiDenoise(src, dest); return 0;
 	}
 
 	const string keys =
